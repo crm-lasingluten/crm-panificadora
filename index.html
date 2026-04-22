@@ -47,6 +47,24 @@ async function sbDelete(table, id) {
   if (!r.ok) throw new Error(await r.text());
 }
 
+create table usuarios (
+  id serial primary key,
+  nombre text unique not null,
+  password text not null,
+  admin boolean default false,
+  created_at timestamptz default now()
+);
+
+insert into usuarios (nombre, password, admin) values
+  ('Rodrigo',  'LSG2026r',  false),
+  ('Miriam',   'LSG2026m',  false),
+  ('Alex',     'LSG2026a',  false),
+  ('Fernando', 'LSG2026f',  false),
+  ('Maru',     'LSG2026u',  true);
+
+alter table usuarios enable row level security;
+create policy "acceso_total" on usuarios for all using (true) with check (true);
+  
 // ── Usuarios ──────────────────────────────────────────────────────────────────
 const USERS = {
   Rodrigo:  { pass: "LSG2026r",  admin: false },
