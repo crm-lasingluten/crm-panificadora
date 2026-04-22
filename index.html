@@ -20,12 +20,10 @@
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo } = React;
 
-
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
 const H = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}`, "Prefer": "return=representation" };
-
 
 async function sbGet(table, params = "") {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: H });
@@ -47,7 +45,6 @@ async function sbDelete(table, id) {
   if (!r.ok) throw new Error(await r.text());
 }
 
-
 // ── Constantes ────────────────────────────────────────────────────────────────
 const TIPOS = ["Llamada", "Email", "Reunión", "Nota"];
 const PRIORIDADES = ["Alta", "Media", "Baja"];
@@ -58,7 +55,6 @@ const estadoColor = { Pendiente: "#378add", "En curso": "#ba7517", Completada: "
 const tipoColor   = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Nota: "#888780" };
 const normalize   = s => s?.trim().toLowerCase().replace(/\s+/g, " ");
 const emptyClient = { nombre: "", nif: "", calle: "", numero: "", cp: "", ciudad: "", pais: "España", telefono: "", email: "", contacto: "", canal: "", grupo: "", gestor: "" };
-
 
 function toCSV(rows, cols) {
   const h = cols.map(c => c.label).join(",");
@@ -71,7 +67,6 @@ function downloadCSV(content, filename) {
   const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
-
 
 // ── UI primitivos ─────────────────────────────────────────────────────────────
 function Badge({ color, label }) {
@@ -126,7 +121,6 @@ function ErrMsg({ msg, onRetry }) {
     {onRetry && <Btn onClick={onRetry}>Reintentar</Btn>}
   </div>;
 }
-
 
 // ── FORM: Cliente ─────────────────────────────────────────────────────────────
 function ClienteForm({ initial, config, clients, onSave, onCancel, saving }) {
@@ -183,7 +177,6 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving }) {
   );
 }
 
-
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
 function ActividadForm({ initial, config, clients, onSave, onCancel, saving }) {
   const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: new Date().toISOString().slice(0, 10), gestor: config.gestores[0] || "", clienteId: "", ...initial }));
@@ -218,7 +211,6 @@ function ActividadForm({ initial, config, clients, onSave, onCancel, saving }) {
     </Card>
   );
 }
-
 
 // ── FORM: Tarea ───────────────────────────────────────────────────────────────
 function TareaForm({ initial, config, clients, onSave, onCancel, saving }) {
@@ -257,7 +249,6 @@ function TareaForm({ initial, config, clients, onSave, onCancel, saving }) {
     </Card>
   );
 }
-
 
 // ── Detalle Cliente ───────────────────────────────────────────────────────────
 function DetalleCliente({ cliente, activities, tasks, onClose }) {
@@ -298,7 +289,6 @@ function DetalleCliente({ cliente, activities, tasks, onClose }) {
   );
 }
 
-
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
   const [tab, setTab] = useState("Dashboard");
@@ -317,9 +307,7 @@ function CRM() {
   const [rptFilter, setRptFilter] = useState({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" });
   const [newVal, setNewVal] = useState({ canal: "", grupo: "", gestor: "" });
 
-
   const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
-
 
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null);
@@ -341,9 +329,7 @@ function CRM() {
     finally { setLoading(false); }
   }, []);
 
-
   useEffect(() => { loadAll(); }, [loadAll]);
-
 
   async function saveConfig(key, arr) {
     const rows = await sbGet("config", `clave=eq.${key}&select=id`);
@@ -400,13 +386,11 @@ function CRM() {
     catch (e) { alert("Error: " + e.message); }
   }
 
-
   const filteredClients = useMemo(() => clients.filter(c =>
     (!filter.canal || c.canal === filter.canal) &&
     (!filter.grupo || c.grupo === filter.grupo) &&
     (!filter.gestor || c.gestor === filter.gestor)
   ), [clients, filter]);
-
 
   // ── TABS ──────────────────────────────────────────────────────────────────
   function Dashboard() {
@@ -459,7 +443,6 @@ function CRM() {
     </div>;
   }
 
-
   function TabClientes() {
     return <div>
       {clientPanel === "new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} />}
@@ -503,7 +486,6 @@ function CRM() {
     </div>;
   }
 
-
   function TabActividades() {
     return <div>
       {actPanel !== null && <ActividadForm initial={actPanel === "new" ? {} : { ...actPanel, clienteId: actPanel.cliente_id }} config={config} clients={clients} onSave={saveActivity} onCancel={() => setActPanel(null)} saving={saving} />}
@@ -525,7 +507,6 @@ function CRM() {
       {activities.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin actividades aún.</div>}
     </div>;
   }
-
 
   function TabTareas() {
     return <div>
@@ -549,7 +530,6 @@ function CRM() {
       {tasks.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin tareas aún.</div>}
     </div>;
   }
-
 
   function TabInformes() {
     const fc = clients.filter(c =>
@@ -618,7 +598,6 @@ function CRM() {
     </div>;
   }
 
-
   function TabConfiguracion() {
     const sections = [["Canales", "canal", "canales", "#7f77dd"], ["Grupos gestores", "grupo", "grupos", "#1d9e75"], ["Gestores", "gestor", "gestores", "#378add"]];
     return <div>
@@ -648,18 +627,23 @@ function CRM() {
     </div>;
   }
 
-
   return (
     <div>
       {/* HEADER */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid #e8e8e8" }}>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a" }}>CRM Panificadora La Sin Gluten</div>
-          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>Gestión de clientes B2B</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", padding: "1rem 1.25rem", borderRadius: 12, background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", overflow: "hidden", border: "2px solid rgba(255,255,255,0.6)", flexShrink: 0, background: "#000" }}>
+            <img src="https://crm-lasingluten.github.io/crm-panificadora/logo.png" alt="Logo La Sin Gluten"
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}>CRM Panificadora La Sin Gluten</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>Gestión de clientes B2B</div>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 9, height: 9, borderRadius: "50%", background: loading ? "#ba7517" : error ? "#e24b4a" : "#1d9e75" }} />
-          <span style={{ fontSize: 12, color: "#888" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado · Supabase"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.2)", padding: "5px 12px", borderRadius: 20 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? "#ffd700" : error ? "#ff6b6b" : "#90ee90" }} />
+          <span style={{ fontSize: 12, color: "#fff" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado"}</span>
         </div>
       </div>
       {/* TABS */}
@@ -681,7 +665,6 @@ function CRM() {
     </div>
   );
 }
-
 
 ReactDOM.createRoot(document.getElementById("root")).render(<CRM />);
 </script>
