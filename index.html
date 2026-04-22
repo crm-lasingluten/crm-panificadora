@@ -7,18 +7,20 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
     #root { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
     input, select, textarea, button { font-family: inherit; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback, useMemo } = React;
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
@@ -45,11 +47,22 @@ async function sbDelete(table, id) {
   if (!r.ok) throw new Error(await r.text());
 }
 
+// ── Usuarios ──────────────────────────────────────────────────────────────────
+const USERS = {
+  Rodrigo:  { pass: "LSG2026r",  admin: false },
+  Miriam:   { pass: "LSG2026m",  admin: false },
+  Alex:     { pass: "LSG2026a",  admin: false },
+  Fernando: { pass: "LSG2026f",  admin: false },
+  Maru:     { pass: "LSG2026u",  admin: true  },
+};
+
 // ── Constantes ────────────────────────────────────────────────────────────────
 const TIPOS = ["Llamada", "Email", "Reunión", "Nota"];
 const PRIORIDADES = ["Alta", "Media", "Baja"];
 const ESTADOS_TAREA = ["Pendiente", "En curso", "Completada"];
 const TABS = ["Dashboard", "Clientes", "Actividades", "Tareas", "Informes", "Configuración"];
+const EXCEL_COLS = ["nombre","nif","calle","numero","cp","ciudad","pais","telefono","email","contacto","canal","grupo","gestor"];
+
 const prioColor   = { Alta: "#e24b4a", Media: "#ba7517", Baja: "#1d9e75" };
 const estadoColor = { Pendiente: "#378add", "En curso": "#ba7517", Completada: "#1d9e75" };
 const tipoColor   = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Nota: "#888780" };
@@ -66,6 +79,11 @@ function downloadCSV(content, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+function today() { return new Date().toISOString().slice(0, 10); }
+function diffDays(fecha) {
+  const d = new Date(fecha) - new Date(today());
+  return Math.ceil(d / (1000 * 60 * 60 * 24));
 }
 
 // ── UI primitivos ─────────────────────────────────────────────────────────────
@@ -88,8 +106,8 @@ function Sel({ value, onChange, options, placeholder }) {
   </select>;
 }
 function Btn({ onClick, children, variant = "default", style, disabled }) {
-  const bg = { primary: "#185fa5", success: "#0f6e56", danger: "#a32d2d", default: "#fff" };
-  const col = { primary: "#fff", success: "#fff", danger: "#fff", default: "#333" };
+  const bg = { primary: "#185fa5", success: "#0f6e56", danger: "#a32d2d", warning: "#ba7517", default: "#fff" };
+  const col = { primary: "#fff", success: "#fff", danger: "#fff", warning: "#fff", default: "#333" };
   return <button onClick={onClick} disabled={disabled}
     style={{ cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, borderRadius: 8, fontSize: 13, padding: "7px 14px", fontWeight: 500, border: "1px solid #ddd", background: bg[variant] || bg.default, color: col[variant] || col.default, ...style }}>
     {children}
@@ -122,17 +140,101 @@ function ErrMsg({ msg, onRetry }) {
   </div>;
 }
 
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [users, setUsers] = useState(() => {
+    try { const s = localStorage.getItem("crm_users"); return s ? JSON.parse(s) : USERS; } catch { return USERS; }
+  });
+  const [gestor, setGestor] = useState("");
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState("");
+
+  function handleLogin() {
+    if (!gestor) { setError("Selecciona tu nombre"); return; }
+    if (!pass) { setError("Ingresa tu contraseña"); return; }
+    const u = users[gestor];
+    if (!u || u.pass !== pass) { setError("Contraseña incorrecta"); return; }
+    onLogin({ nombre: gestor, admin: u.admin, users, setUsers });
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: "2.5rem 2rem", width: "100%", maxWidth: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", animation: "slideIn 0.3s ease" }}>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{ width: 90, height: 90, borderRadius: "50%", overflow: "hidden", margin: "0 auto 1rem", border: "3px solid #8ecfd4" }}>
+            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a" }}>CRM Panificadora</div>
+          <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>La Sin Gluten</div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Tu nombre</div>
+          <Sel value={gestor} onChange={v => { setGestor(v); setError(""); }} options={Object.keys(users)} placeholder="Selecciona tu nombre" />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Contraseña</div>
+          <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(""); }}
+            onKeyDown={e => e.key === "Enter" && handleLogin()}
+            placeholder="Tu contraseña"
+            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }} />
+        </div>
+        {error && <div style={{ fontSize: 12, color: "#e24b4a", marginBottom: 12, textAlign: "center" }}>{error}</div>}
+        <Btn variant="primary" onClick={handleLogin} style={{ width: "100%", padding: "10px", fontSize: 14 }}>Entrar</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── NOTIFICACIONES ────────────────────────────────────────────────────────────
+function NotifBanner({ tasks, clients }) {
+  const alertas = useMemo(() => {
+    const hoy = today();
+    return tasks.filter(t => t.estado !== "Completada").map(t => {
+      const d = diffDays(t.fecha);
+      if (d < 0) return { ...t, tipo: "vencida", label: `Vencida hace ${Math.abs(d)} día${Math.abs(d) !== 1 ? "s" : ""}` };
+      if (d === 0) return { ...t, tipo: "hoy", label: "Vence hoy" };
+      if (d <= 3) return { ...t, tipo: "proxima", label: `Vence en ${d} día${d !== 1 ? "s" : ""}` };
+      return null;
+    }).filter(Boolean).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }, [tasks]);
+
+  const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
+  const [visible, setVisible] = useState(true);
+  if (!alertas.length || !visible) return null;
+
+  const bgColor = alertas.some(a => a.tipo === "vencida") ? "#fef2f2" : alertas.some(a => a.tipo === "hoy") ? "#fff7ed" : "#fffbeb";
+  const borderColor = alertas.some(a => a.tipo === "vencida") ? "#fca5a5" : alertas.some(a => a.tipo === "hoy") ? "#fed7aa" : "#fde68a";
+  const icon = alertas.some(a => a.tipo === "vencida") ? "🔴" : alertas.some(a => a.tipo === "hoy") ? "🟠" : "🟡";
+
+  return (
+    <div style={{ background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: 16, animation: "slideIn 0.3s ease" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{icon} {alertas.length} tarea{alertas.length !== 1 ? "s" : ""} requieren atención</div>
+          {alertas.slice(0, 3).map(a => (
+            <div key={a.id} style={{ fontSize: 12, color: "#555", marginBottom: 3, display: "flex", gap: 8 }}>
+              <Badge color={a.tipo === "vencida" ? "#e24b4a" : a.tipo === "hoy" ? "#ba7517" : "#d97706"} label={a.label} />
+              <span>{a.titulo} — {clientName(a.cliente_id)} · {a.gestor}</span>
+            </div>
+          ))}
+          {alertas.length > 3 && <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>...y {alertas.length - 3} más. Ve a Tareas para verlas todas.</div>}
+        </div>
+        <button onClick={() => setVisible(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#888", fontSize: 18, marginLeft: 12 }}>×</button>
+      </div>
+    </div>
+  );
+}
+
 // ── FORM: Cliente ─────────────────────────────────────────────────────────────
-function ClienteForm({ initial, config, clients, onSave, onCancel, saving }) {
-  const [form, setForm] = useState(() => ({ ...emptyClient, canal: config.canales[0] || "", grupo: config.grupos[0] || "", gestor: config.gestores[0] || "", ...initial }));
+function ClienteForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
+  const [form, setForm] = useState(() => ({ ...emptyClient, canal: config.canales[0] || "", grupo: config.grupos[0] || "", gestor: currentUser.nombre, ...initial }));
   const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   function validate() {
     const errs = {};
     if (!form.nombre.trim()) errs.nombre = "Obligatorio";
     if (!form.nif.trim()) errs.nif = "Obligatorio";
-    if (!form.email.trim()) errs.email = "Obligatorio";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Email no válido";
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Email no válido";
     if (!form.contacto.trim()) errs.contacto = "Obligatorio";
     const others = clients.filter(c => c.id !== form.id);
     if (form.nombre.trim() && others.some(c => normalize(c.nombre) === normalize(form.nombre))) errs.nombre = "Ya existe ese nombre";
@@ -163,7 +265,7 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving }) {
       <Sep label="Contacto" />
       <FRow>
         <FL label="Teléfono" flex={1}><Inp value={form.telefono} onChange={v => set("telefono", v)} placeholder="900 000 000" type="tel" /></FL>
-        <FL label="Email *" flex={1} error={errors.email}><Inp value={form.email} onChange={v => set("email", v)} placeholder="email@empresa.com" error={errors.email} /></FL>
+        <FL label="Email" flex={1} error={errors.email}><Inp value={form.email} onChange={v => set("email", v)} placeholder="email@empresa.com" error={errors.email} /></FL>
       </FRow>
       <FRow><FL label="Persona de contacto *" error={errors.contacto}><Inp value={form.contacto} onChange={v => set("contacto", v)} placeholder="Nombre y apellidos" error={errors.contacto} /></FL></FRow>
       <Sep label="Clasificación" />
@@ -178,8 +280,8 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving }) {
 }
 
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
-function ActividadForm({ initial, config, clients, onSave, onCancel, saving }) {
-  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: new Date().toISOString().slice(0, 10), gestor: config.gestores[0] || "", clienteId: "", ...initial }));
+function ActividadForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
+  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: today(), gestor: currentUser.nombre, clienteId: "", ...initial }));
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
   const handleGestorChange = v => {
@@ -213,8 +315,8 @@ function ActividadForm({ initial, config, clients, onSave, onCancel, saving }) {
 }
 
 // ── FORM: Tarea ───────────────────────────────────────────────────────────────
-function TareaForm({ initial, config, clients, onSave, onCancel, saving }) {
-  const [form, setForm] = useState(() => ({ titulo: "", fecha: new Date().toISOString().slice(0, 10), prioridad: "Media", estado: "Pendiente", gestor: config.gestores[0] || "", clienteId: "", ...initial }));
+function TareaForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
+  const [form, setForm] = useState(() => ({ titulo: "", fecha: today(), prioridad: "Media", estado: "Pendiente", gestor: currentUser.nombre, clienteId: "", ...initial }));
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
   const handleGestorChange = v => {
@@ -289,8 +391,163 @@ function DetalleCliente({ cliente, activities, tasks, onClose }) {
   );
 }
 
+// ── ADMIN: Gestión de contraseñas ─────────────────────────────────────────────
+function AdminPanel({ currentUser }) {
+  const [users, setUsers] = useState(() => {
+    try { const s = localStorage.getItem("crm_users"); return s ? JSON.parse(s) : USERS; } catch { return USERS; }
+  });
+  const [newPasses, setNewPasses] = useState({});
+  const [saved, setSaved] = useState({});
+
+  function savePass(nombre) {
+    const np = newPasses[nombre]?.trim();
+    if (!np || np.length < 4) { alert("La contraseña debe tener al menos 4 caracteres"); return; }
+    const updated = { ...users, [nombre]: { ...users[nombre], pass: np } };
+    setUsers(updated);
+    localStorage.setItem("crm_users", JSON.stringify(updated));
+    setNewPasses(p => ({ ...p, [nombre]: "" }));
+    setSaved(s => ({ ...s, [nombre]: true }));
+    setTimeout(() => setSaved(s => ({ ...s, [nombre]: false })), 2000);
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, color: "#555" }}>🔐 Gestión de contraseñas</div>
+      {Object.keys(users).map(nombre => (
+        <div key={nombre} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #eee" }}>
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{nombre} {users[nombre].admin && <Badge color="#185fa5" label="Admin" />}</div>
+          <input type="password" value={newPasses[nombre] || ""} onChange={e => setNewPasses(p => ({ ...p, [nombre]: e.target.value }))}
+            placeholder="Nueva contraseña" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: 180 }} />
+          <Btn variant="primary" onClick={() => savePass(nombre)}>{saved[nombre] ? "✓ Guardado" : "Cambiar"}</Btn>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── IMPORTACIÓN EXCEL ─────────────────────────────────────────────────────────
+function ImportExcel({ config, clients, onImport, onClose }) {
+  const [preview, setPreview] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState(null);
+  const fileRef = useRef();
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: "binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const dataRows = rows.slice(1).filter(r => r.some(c => c !== undefined && c !== ""));
+        const mapped = dataRows.map(r => ({
+          nombre:   String(r[0] || "").trim(),
+          nif:      String(r[1] || "").trim(),
+          calle:    String(r[2] || "").trim(),
+          numero:   String(r[3] || "").trim(),
+          cp:       String(r[4] || "").trim(),
+          ciudad:   String(r[5] || "").trim(),
+          pais:     String(r[6] || "España").trim() || "España",
+          telefono: String(r[7] || "").trim(),
+          email:    String(r[8] || "").trim(),
+          contacto: String(r[9] || "").trim(),
+          canal:    String(r[10] || "").trim(),
+          grupo:    String(r[11] || "").trim(),
+          gestor:   String(r[12] || "").trim(),
+        })).filter(r => r.nombre);
+        setPreview(mapped);
+        setResult(null);
+      } catch (err) { alert("Error leyendo el archivo: " + err.message); }
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  async function handleImport() {
+    if (!preview?.length) return;
+    setImporting(true);
+    let ok = 0, skip = 0, err = 0;
+    for (const row of preview) {
+      const existe = clients.some(c => normalize(c.nif) === normalize(row.nif) || normalize(c.nombre) === normalize(row.nombre));
+      if (existe) { skip++; continue; }
+      try {
+        await sbPost("clientes", row);
+        ok++;
+      } catch { err++; }
+    }
+    setImporting(false);
+    setResult({ ok, skip, err });
+    if (ok > 0) onImport();
+  }
+
+  function downloadTemplate() {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Nombre empresa","NIF","Calle","Número","CP","Ciudad","País","Teléfono","Email","Contacto","Canal","Grupo","Gestor"],
+      ["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","932000001","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo"]
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+    XLSX.writeFile(wb, "plantilla_clientes.xlsx");
+  }
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>📥 Importar clientes desde Excel</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      </div>
+      <div style={{ fontSize: 13, color: "#555", marginBottom: 12 }}>
+        El archivo Excel debe tener estas columnas en orden (la primera fila es el encabezado, los campos pueden estar vacíos excepto <strong>Nombre empresa</strong>):
+      </div>
+      <div style={{ fontSize: 12, background: "#f5f5f5", padding: "8px 12px", borderRadius: 8, marginBottom: 16, color: "#555", fontFamily: "monospace" }}>
+        Nombre empresa | NIF | Calle | Número | CP | Ciudad | País | Teléfono | Email | Contacto | Canal | Grupo | Gestor
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <Btn variant="success" onClick={downloadTemplate}>⬇ Descargar plantilla Excel</Btn>
+        <Btn variant="primary" onClick={() => fileRef.current.click()}>📂 Seleccionar archivo</Btn>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: "none" }} />
+      </div>
+      {preview && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} cliente{preview.length !== 1 ? "s" : ""} encontrados</div>
+          <div style={{ overflowX: "auto", maxHeight: 220, overflowY: "auto", marginBottom: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead style={{ background: "#f9f9f9", position: "sticky", top: 0 }}>
+                <tr>{["Empresa","NIF","Ciudad","Email","Contacto","Gestor"].map(h => (
+                  <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#555", borderBottom: "1px solid #eee" }}>{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>{preview.map((r, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                  <td style={{ padding: "5px 8px" }}>{r.nombre || "—"}</td>
+                  <td style={{ padding: "5px 8px", color: "#888" }}>{r.nif || "—"}</td>
+                  <td style={{ padding: "5px 8px", color: "#888" }}>{r.ciudad || "—"}</td>
+                  <td style={{ padding: "5px 8px", color: "#888" }}>{r.email || "—"}</td>
+                  <td style={{ padding: "5px 8px" }}>{r.contacto || "—"}</td>
+                  <td style={{ padding: "5px 8px" }}>{r.gestor || "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          {result ? (
+            <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>
+              ✅ Importación completada — <strong>{result.ok}</strong> importados, <strong>{result.skip}</strong> omitidos (ya existían), <strong>{result.err}</strong> errores
+            </div>
+          ) : (
+            <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>
+              {importing ? "Importando…" : `Importar ${preview.length} cliente${preview.length !== 1 ? "s" : ""}`}
+            </Btn>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
+  const [currentUser, setCurrentUser] = useState(null);
   const [tab, setTab] = useState("Dashboard");
   const [config, setConfigState] = useState({ canales: [], grupos: [], gestores: [] });
   const [clients, setClients] = useState([]);
@@ -303,6 +560,7 @@ function CRM() {
   const [detalleId, setDetalleId] = useState(null);
   const [actPanel, setActPanel] = useState(null);
   const [taskPanel, setTaskPanel] = useState(null);
+  const [showImport, setShowImport] = useState(false);
   const [filter, setFilter] = useState({ canal: "", grupo: "", gestor: "" });
   const [rptFilter, setRptFilter] = useState({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" });
   const [newVal, setNewVal] = useState({ canal: "", grupo: "", gestor: "" });
@@ -329,7 +587,7 @@ function CRM() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { if (currentUser) loadAll(); }, [currentUser, loadAll]);
 
   async function saveConfig(key, arr) {
     const rows = await sbGet("config", `clave=eq.${key}&select=id`);
@@ -392,9 +650,12 @@ function CRM() {
     (!filter.gestor || c.gestor === filter.gestor)
   ), [clients, filter]);
 
+  if (!currentUser) return <Login onLogin={u => setCurrentUser(u)} />;
+
   // ── TABS ──────────────────────────────────────────────────────────────────
   function Dashboard() {
     return <div>
+      <NotifBanner tasks={tasks} clients={clients} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
         {[["Clientes", clients.length, "#185fa5"], ["Actividades", activities.length, "#1d9e75"], ["Tareas pendientes", tasks.filter(t => t.estado !== "Completada").length, "#ba7517"]].map(([l, v, c]) => (
           <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 10, padding: "1rem", textAlign: "center" }}>
@@ -416,12 +677,19 @@ function CRM() {
         </Card>
         <Card>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Próximas tareas</div>
-          {tasks.filter(t => t.estado !== "Completada").slice(0, 5).map(t => (
-            <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
-              <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
-              <div><div style={{ fontSize: 13 }}>{t.titulo}</div><div style={{ fontSize: 11, color: "#888" }}>{clientName(t.cliente_id)} · {t.fecha}</div></div>
-            </div>
-          ))}
+          {tasks.filter(t => t.estado !== "Completada").slice(0, 5).map(t => {
+            const d = diffDays(t.fecha);
+            const alerta = d < 0 ? "#e24b4a" : d === 0 ? "#ba7517" : d <= 3 ? "#d97706" : null;
+            return (
+              <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+                <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13 }}>{t.titulo}</div>
+                  <div style={{ fontSize: 11, color: alerta || "#888" }}>{clientName(t.cliente_id)} · {t.fecha}{alerta ? (d < 0 ? " ⚠️ Vencida" : d === 0 ? " ⚠️ Hoy" : " ⏰ Próxima") : ""}</div>
+                </div>
+              </div>
+            );
+          })}
           {tasks.filter(t => t.estado !== "Completada").length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin tareas pendientes.</div>}
         </Card>
       </div>
@@ -445,19 +713,23 @@ function CRM() {
 
   function TabClientes() {
     return <div>
-      {clientPanel === "new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} />}
-      {clientPanel && clientPanel !== "new" && <ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} />}
+      {showImport && <ImportExcel config={config} clients={clients} onImport={async () => { await loadAll(); setShowImport(false); }} onClose={() => setShowImport(false)} />}
+      {clientPanel === "new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} currentUser={currentUser} />}
+      {clientPanel && clientPanel !== "new" && <ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} currentUser={currentUser} />}
       {detalleId && !clientPanel && <DetalleCliente cliente={clients.find(c => c.id === detalleId)} activities={activities} tasks={tasks} onClose={() => setDetalleId(null)} />}
-      {!clientPanel && <>
+      {!clientPanel && !showImport && <>
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
           <Sel value={filter.canal} onChange={v => setFilter(f => ({ ...f, canal: v }))} options={config.canales} placeholder="Canal" />
           <Sel value={filter.grupo} onChange={v => setFilter(f => ({ ...f, grupo: v }))} options={config.grupos} placeholder="Grupo" />
           <Sel value={filter.gestor} onChange={v => setFilter(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Gestor" />
           <Btn onClick={() => setFilter({ canal: "", grupo: "", gestor: "" })}>Limpiar</Btn>
-          <Btn variant="primary" onClick={() => { setDetalleId(null); setClientPanel("new"); }} style={{ marginLeft: "auto" }}>+ Nuevo cliente</Btn>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <Btn variant="warning" onClick={() => { setDetalleId(null); setClientPanel(null); setShowImport(true); }}>📥 Importar Excel</Btn>
+            <Btn variant="primary" onClick={() => { setDetalleId(null); setShowImport(false); setClientPanel("new"); }}>+ Nuevo cliente</Btn>
+          </div>
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
             <thead style={{ background: "#f9f9f9" }}>
               <tr>{["Empresa", "NIF", "Ciudad", "Contacto", "Canal", "Gestor", ""].map(h => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee" }}>{h}</th>
@@ -465,7 +737,7 @@ function CRM() {
             </thead>
             <tbody>{filteredClients.map(c => (
               <tr key={c.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setDetalleId(c.id); }}>{c.nombre}</td>
+                <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setShowImport(false); setDetalleId(c.id); }}>{c.nombre}</td>
                 <td style={{ padding: "9px 10px", color: "#888", fontSize: 12 }}>{c.nif}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12, color: "#666" }}>{c.ciudad}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12 }}>{c.contacto}</td>
@@ -488,7 +760,7 @@ function CRM() {
 
   function TabActividades() {
     return <div>
-      {actPanel !== null && <ActividadForm initial={actPanel === "new" ? {} : { ...actPanel, clienteId: actPanel.cliente_id }} config={config} clients={clients} onSave={saveActivity} onCancel={() => setActPanel(null)} saving={saving} />}
+      {actPanel !== null && <ActividadForm initial={actPanel === "new" ? {} : { ...actPanel, clienteId: actPanel.cliente_id }} config={config} clients={clients} onSave={saveActivity} onCancel={() => setActPanel(null)} saving={saving} currentUser={currentUser} />}
       <div style={{ display: "flex", marginBottom: 14 }}>
         <Btn variant="primary" onClick={() => setActPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva actividad</Btn>
       </div>
@@ -510,23 +782,32 @@ function CRM() {
 
   function TabTareas() {
     return <div>
-      {taskPanel !== null && <TareaForm initial={taskPanel === "new" ? {} : { ...taskPanel, clienteId: taskPanel.cliente_id }} config={config} clients={clients} onSave={saveTask} onCancel={() => setTaskPanel(null)} saving={saving} />}
+      {taskPanel !== null && <TareaForm initial={taskPanel === "new" ? {} : { ...taskPanel, clienteId: taskPanel.cliente_id }} config={config} clients={clients} onSave={saveTask} onCancel={() => setTaskPanel(null)} saving={saving} currentUser={currentUser} />}
       <div style={{ display: "flex", marginBottom: 14 }}>
         <Btn variant="primary" onClick={() => setTaskPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva tarea</Btn>
       </div>
-      {tasks.map(t => (
-        <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
-          <input type="checkbox" checked={t.estado === "Completada"} onChange={() => toggleTask(t)} style={{ cursor: "pointer", width: 16, height: 16 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, textDecoration: t.estado === "Completada" ? "line-through" : "none", color: t.estado === "Completada" ? "#aaa" : "#1a1a1a" }}>{t.titulo}</div>
-            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{clientName(t.cliente_id)} · {t.fecha} · {t.gestor}</div>
+      {tasks.map(t => {
+        const d = diffDays(t.fecha);
+        const alerta = t.estado !== "Completada" && (d < 0 ? "#fef2f2" : d === 0 ? "#fff7ed" : d <= 3 ? "#fffbeb" : null);
+        return (
+          <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 10px", marginBottom: 4, borderRadius: 8, background: alerta || "transparent", border: alerta ? `1px solid ${d < 0 ? "#fca5a5" : d === 0 ? "#fed7aa" : "#fde68a"}` : "1px solid transparent", borderBottom: alerta ? undefined : "1px solid #f0f0f0" }}>
+            <input type="checkbox" checked={t.estado === "Completada"} onChange={() => toggleTask(t)} style={{ cursor: "pointer", width: 16, height: 16 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, textDecoration: t.estado === "Completada" ? "line-through" : "none", color: t.estado === "Completada" ? "#aaa" : "#1a1a1a" }}>{t.titulo}</div>
+              <div style={{ fontSize: 11, color: t.estado !== "Completada" && d < 0 ? "#e24b4a" : "#aaa", marginTop: 2 }}>
+                {clientName(t.cliente_id)} · {t.fecha} · {t.gestor}
+                {t.estado !== "Completada" && d < 0 && " ⚠️ Vencida"}
+                {t.estado !== "Completada" && d === 0 && " ⚠️ Vence hoy"}
+                {t.estado !== "Completada" && d > 0 && d <= 3 && ` ⏰ Vence en ${d} día${d !== 1 ? "s" : ""}`}
+              </div>
+            </div>
+            <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
+            <Badge color={estadoColor[t.estado]} label={t.estado} />
+            <Btn onClick={() => setTaskPanel(t)}>Editar</Btn>
+            <Btn onClick={() => deleteTask(t.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
           </div>
-          <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
-          <Badge color={estadoColor[t.estado]} label={t.estado} />
-          <Btn onClick={() => setTaskPanel(t)}>Editar</Btn>
-          <Btn onClick={() => deleteTask(t.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
-        </div>
-      ))}
+        );
+      })}
       {tasks.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin tareas aún.</div>}
     </div>;
   }
@@ -601,6 +882,7 @@ function CRM() {
   function TabConfiguracion() {
     const sections = [["Canales", "canal", "canales", "#7f77dd"], ["Grupos gestores", "grupo", "grupos", "#1d9e75"], ["Gestores", "gestor", "gestores", "#378add"]];
     return <div>
+      {currentUser.admin && <><AdminPanel currentUser={currentUser} /><Sep label="Listas de configuración" /></>}
       {sections.map(([label, ckey, k, color]) => (
         <div key={ckey} style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{label}</div>
@@ -632,8 +914,8 @@ function CRM() {
       {/* HEADER */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", padding: "1rem 1.25rem", borderRadius: 12, background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", overflow: "hidden", border: "2px solid rgba(255,255,255,0.6)", flexShrink: 0, background: "#000" }}>
-                          <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo La Sin Gluten"
+          <div style={{ width: 64, height: 64, borderRadius: "50%", overflow: "hidden", border: "2px solid rgba(255,255,255,0.6)", flexShrink: 0 }}>
+            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo"
               style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
           </div>
           <div>
@@ -641,9 +923,15 @@ function CRM() {
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>Gestión de clientes B2B</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.2)", padding: "5px 12px", borderRadius: 20 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? "#ffd700" : error ? "#ff6b6b" : "#90ee90" }} />
-          <span style={{ fontSize: 12, color: "#fff" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", background: "rgba(255,255,255,0.15)", padding: "4px 12px", borderRadius: 20 }}>
+            👤 {currentUser.nombre} {currentUser.admin && "⭐"}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.2)", padding: "5px 12px", borderRadius: 20 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? "#ffd700" : error ? "#ff6b6b" : "#90ee90" }} />
+            <span style={{ fontSize: 12, color: "#fff" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado"}</span>
+          </div>
+          <Btn onClick={() => setCurrentUser(null)} style={{ fontSize: 12, padding: "5px 12px", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }}>Salir</Btn>
         </div>
       </div>
       {/* TABS */}
@@ -653,7 +941,6 @@ function CRM() {
             style={{ padding: "8px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: tab === t ? 600 : 400, color: tab === t ? "#185fa5" : "#666", borderBottom: tab === t ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1, whiteSpace: "nowrap" }}>{t}</button>
         ))}
       </div>
-      {/* CONTENT */}
       {loading ? <Spinner /> : error ? <ErrMsg msg={error} onRetry={loadAll} /> : <>
         {tab === "Dashboard"     && <Dashboard />}
         {tab === "Clientes"      && <TabClientes />}
