@@ -1,0 +1,689 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRM Panificadora La Sin Gluten</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
+    #root { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+    input, select, textarea, button { font-family: inherit; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo } = React;
+
+
+// ── Supabase ──────────────────────────────────────────────────────────────────
+const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
+const H = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}`, "Prefer": "return=representation" };
+
+
+async function sbGet(table, params = "") {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: H });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: H, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, id, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "PATCH", headers: H, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbDelete(table, id) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: H });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+
+// ── Constantes ────────────────────────────────────────────────────────────────
+const TIPOS = ["Llamada", "Email", "Reunión", "Nota"];
+const PRIORIDADES = ["Alta", "Media", "Baja"];
+const ESTADOS_TAREA = ["Pendiente", "En curso", "Completada"];
+const TABS = ["Dashboard", "Clientes", "Actividades", "Tareas", "Informes", "Configuración"];
+const prioColor   = { Alta: "#e24b4a", Media: "#ba7517", Baja: "#1d9e75" };
+const estadoColor = { Pendiente: "#378add", "En curso": "#ba7517", Completada: "#1d9e75" };
+const tipoColor   = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Nota: "#888780" };
+const normalize   = s => s?.trim().toLowerCase().replace(/\s+/g, " ");
+const emptyClient = { nombre: "", nif: "", calle: "", numero: "", cp: "", ciudad: "", pais: "España", telefono: "", email: "", contacto: "", canal: "", grupo: "", gestor: "" };
+
+
+function toCSV(rows, cols) {
+  const h = cols.map(c => c.label).join(",");
+  const b = rows.map(r => cols.map(c => `"${(r[c.key] ?? "").toString().replace(/"/g, '""')}"`).join(",")).join("\n");
+  return h + "\n" + b;
+}
+function downloadCSV(content, filename) {
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+// ── UI primitivos ─────────────────────────────────────────────────────────────
+function Badge({ color, label }) {
+  return <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: color + "22", color, fontWeight: 500, whiteSpace: "nowrap" }}>{label}</span>;
+}
+function Inp({ value, onChange, placeholder, type = "text", error }) {
+  return <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+    style={{ padding: "7px 10px", border: `1px solid ${error ? "#e24b4a" : "#ddd"}`, borderRadius: 8, fontSize: 13, background: "#fff", color: "#1a1a1a", width: "100%" }} />;
+}
+function Textarea({ value, onChange, placeholder, rows = 4 }) {
+  return <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
+    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", color: "#1a1a1a", width: "100%", resize: "vertical", fontFamily: "inherit" }} />;
+}
+function Sel({ value, onChange, options, placeholder }) {
+  return <select value={value} onChange={e => onChange(e.target.value)}
+    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", color: "#1a1a1a", width: "100%" }}>
+    {placeholder && <option value="">{placeholder}</option>}
+    {options.map(o => <option key={o} value={o}>{o}</option>)}
+  </select>;
+}
+function Btn({ onClick, children, variant = "default", style, disabled }) {
+  const bg = { primary: "#185fa5", success: "#0f6e56", danger: "#a32d2d", default: "#fff" };
+  const col = { primary: "#fff", success: "#fff", danger: "#fff", default: "#333" };
+  return <button onClick={onClick} disabled={disabled}
+    style={{ cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, borderRadius: 8, fontSize: 13, padding: "7px 14px", fontWeight: 500, border: "1px solid #ddd", background: bg[variant] || bg.default, color: col[variant] || col.default, ...style }}>
+    {children}
+  </button>;
+}
+function Sep({ label }) {
+  return <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.6, margin: "14px 0 10px", paddingTop: 12, borderTop: "1px solid #eee" }}>{label}</div>;
+}
+function FL({ label, error, flex = 1, children }) {
+  return <div style={{ flex }}>
+    <div style={{ fontSize: 12, color: error ? "#e24b4a" : "#666", marginBottom: 3 }}>{label}</div>
+    {children}
+    {error && <div style={{ fontSize: 11, color: "#e24b4a", marginTop: 2 }}>{error}</div>}
+  </div>;
+}
+function FRow({ children }) { return <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>{children}</div>; }
+function Card({ children, style }) {
+  return <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 12, padding: "1.25rem", marginBottom: 20, ...style }}>{children}</div>;
+}
+function Spinner() {
+  return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "4rem", color: "#888", fontSize: 13, gap: 10 }}>
+    <div style={{ width: 20, height: 20, border: "2px solid #ddd", borderTopColor: "#185fa5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+    Conectando con la base de datos…
+  </div>;
+}
+function ErrMsg({ msg, onRetry }) {
+  return <div style={{ padding: "1rem", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, color: "#b91c1c", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <span>⚠️ {msg}</span>
+    {onRetry && <Btn onClick={onRetry}>Reintentar</Btn>}
+  </div>;
+}
+
+
+// ── FORM: Cliente ─────────────────────────────────────────────────────────────
+function ClienteForm({ initial, config, clients, onSave, onCancel, saving }) {
+  const [form, setForm] = useState(() => ({ ...emptyClient, canal: config.canales[0] || "", grupo: config.grupos[0] || "", gestor: config.gestores[0] || "", ...initial }));
+  const [errors, setErrors] = useState({});
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  function validate() {
+    const errs = {};
+    if (!form.nombre.trim()) errs.nombre = "Obligatorio";
+    if (!form.nif.trim()) errs.nif = "Obligatorio";
+    if (!form.email.trim()) errs.email = "Obligatorio";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Email no válido";
+    if (!form.contacto.trim()) errs.contacto = "Obligatorio";
+    const others = clients.filter(c => c.id !== form.id);
+    if (form.nombre.trim() && others.some(c => normalize(c.nombre) === normalize(form.nombre))) errs.nombre = "Ya existe ese nombre";
+    if (form.nif.trim() && others.some(c => normalize(c.nif) === normalize(form.nif))) errs.nif = "NIF ya registrado";
+    return errs;
+  }
+  function handleSave() { const e = validate(); setErrors(e); if (!Object.keys(e).length) onSave(form); }
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar cliente" : "Nuevo cliente"}</span>
+        <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      </div>
+      <FRow>
+        <FL label="Nombre de empresa *" flex={2} error={errors.nombre}><Inp value={form.nombre} onChange={v => set("nombre", v)} placeholder="Nombre de la empresa" error={errors.nombre} /></FL>
+        <FL label="NIF *" flex={1} error={errors.nif}><Inp value={form.nif} onChange={v => set("nif", v)} placeholder="A12345678" error={errors.nif} /></FL>
+      </FRow>
+      <Sep label="Dirección" />
+      <FRow>
+        <FL label="Calle" flex={3}><Inp value={form.calle} onChange={v => set("calle", v)} placeholder="Nombre de la calle" /></FL>
+        <FL label="Número" flex={1}><Inp value={form.numero} onChange={v => set("numero", v)} placeholder="Nº" /></FL>
+      </FRow>
+      <FRow>
+        <FL label="CP" flex={1}><Inp value={form.cp} onChange={v => set("cp", v)} placeholder="08001" /></FL>
+        <FL label="Ciudad" flex={2}><Inp value={form.ciudad} onChange={v => set("ciudad", v)} placeholder="Ciudad" /></FL>
+        <FL label="País" flex={2}><Inp value={form.pais} onChange={v => set("pais", v)} placeholder="España" /></FL>
+      </FRow>
+      <Sep label="Contacto" />
+      <FRow>
+        <FL label="Teléfono" flex={1}><Inp value={form.telefono} onChange={v => set("telefono", v)} placeholder="900 000 000" type="tel" /></FL>
+        <FL label="Email *" flex={1} error={errors.email}><Inp value={form.email} onChange={v => set("email", v)} placeholder="email@empresa.com" error={errors.email} /></FL>
+      </FRow>
+      <FRow><FL label="Persona de contacto *" error={errors.contacto}><Inp value={form.contacto} onChange={v => set("contacto", v)} placeholder="Nombre y apellidos" error={errors.contacto} /></FL></FRow>
+      <Sep label="Clasificación" />
+      <FRow>
+        <FL label="Canal" flex={1}><Sel value={form.canal} onChange={v => set("canal", v)} options={config.canales} placeholder="Seleccionar" /></FL>
+        <FL label="Grupo gestor" flex={1}><Sel value={form.grupo} onChange={v => set("grupo", v)} options={config.grupos} placeholder="Seleccionar" /></FL>
+        <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={v => set("gestor", v)} options={config.gestores} placeholder="Seleccionar" /></FL>
+      </FRow>
+      <Btn variant="primary" onClick={handleSave} disabled={saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
+    </Card>
+  );
+}
+
+
+// ── FORM: Actividad ───────────────────────────────────────────────────────────
+function ActividadForm({ initial, config, clients, onSave, onCancel, saving }) {
+  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: new Date().toISOString().slice(0, 10), gestor: config.gestores[0] || "", clienteId: "", ...initial }));
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
+  const handleGestorChange = v => {
+    const filtered = v ? clients.filter(c => c.gestor === v) : clients;
+    set("gestor", v);
+    if (!filtered.some(c => c.id === +form.clienteId)) set("clienteId", filtered[0]?.id || "");
+  };
+  const canSave = form.clienteId && form.nota.trim();
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar actividad" : "Nueva actividad"}</span>
+        <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      </div>
+      <FRow>
+        <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={handleGestorChange} options={config.gestores} placeholder="Seleccionar" /></FL>
+        <FL label="Cliente" flex={2}>
+          <select value={String(form.clienteId)} onChange={e => set("clienteId", +e.target.value)}
+            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }}>
+            <option value="">— Seleccionar cliente —</option>
+            {clientesDelGestor.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        </FL>
+        <FL label="Tipo" flex={1}><Sel value={form.tipo} onChange={v => set("tipo", v)} options={TIPOS} /></FL>
+      </FRow>
+      <FRow><FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL></FRow>
+      <FRow><FL label="Nota / Descripción" flex={1}><Textarea value={form.nota} onChange={v => set("nota", v)} placeholder="Describe la actividad realizada…" /></FL></FRow>
+      <Btn variant="primary" onClick={() => canSave && onSave({ ...form, clienteId: +form.clienteId })} disabled={!canSave || saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
+    </Card>
+  );
+}
+
+
+// ── FORM: Tarea ───────────────────────────────────────────────────────────────
+function TareaForm({ initial, config, clients, onSave, onCancel, saving }) {
+  const [form, setForm] = useState(() => ({ titulo: "", fecha: new Date().toISOString().slice(0, 10), prioridad: "Media", estado: "Pendiente", gestor: config.gestores[0] || "", clienteId: "", ...initial }));
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
+  const handleGestorChange = v => {
+    const filtered = v ? clients.filter(c => c.gestor === v) : clients;
+    set("gestor", v);
+    if (!filtered.some(c => c.id === +form.clienteId)) set("clienteId", filtered[0]?.id || "");
+  };
+  const canSave = form.clienteId && form.titulo.trim();
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar tarea" : "Nueva tarea"}</span>
+        <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      </div>
+      <FRow>
+        <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={handleGestorChange} options={config.gestores} placeholder="Seleccionar" /></FL>
+        <FL label="Cliente" flex={2}>
+          <select value={String(form.clienteId)} onChange={e => set("clienteId", +e.target.value)}
+            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }}>
+            <option value="">— Seleccionar cliente —</option>
+            {clientesDelGestor.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        </FL>
+      </FRow>
+      <FRow><FL label="Título de la tarea" flex={1}><Inp value={form.titulo} onChange={v => set("titulo", v)} placeholder="Describe la tarea a realizar" /></FL></FRow>
+      <FRow>
+        <FL label="Fecha límite" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL>
+        <FL label="Prioridad" flex={1}><Sel value={form.prioridad} onChange={v => set("prioridad", v)} options={PRIORIDADES} /></FL>
+        <FL label="Estado" flex={1}><Sel value={form.estado} onChange={v => set("estado", v)} options={ESTADOS_TAREA} /></FL>
+      </FRow>
+      <Btn variant="primary" onClick={() => canSave && onSave({ ...form, clienteId: +form.clienteId })} disabled={!canSave || saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
+    </Card>
+  );
+}
+
+
+// ── Detalle Cliente ───────────────────────────────────────────────────────────
+function DetalleCliente({ cliente, activities, tasks, onClose }) {
+  const cActs = activities.filter(a => a.cliente_id === cliente.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const cTasks = tasks.filter(t => t.cliente_id === cliente.id);
+  const dir = [cliente.calle, cliente.numero].filter(Boolean).join(" ") + ([cliente.cp, cliente.ciudad].filter(Boolean).length ? ", " + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ") : "") + (cliente.pais ? ", " + cliente.pais : "");
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>{cliente.nombre}</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {cliente.canal && <Badge color="#7f77dd" label={cliente.canal} />}
+        {cliente.grupo && <Badge color="#1d9e75" label={cliente.grupo} />}
+        {cliente.gestor && <Badge color="#378add" label={cliente.gestor} />}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px", fontSize: 13, marginBottom: 14 }}>
+        {[["NIF", cliente.nif], ["Teléfono", cliente.telefono], ["Email", cliente.email], ["Contacto", cliente.contacto]].map(([l, v]) => (
+          <div key={l}><span style={{ fontSize: 11, color: "#888" }}>{l}: </span>{v || "—"}</div>
+        ))}
+        <div style={{ gridColumn: "1/-1" }}><span style={{ fontSize: 11, color: "#888" }}>Dirección: </span>{dir || "—"}</div>
+      </div>
+      <Sep label={`Actividades (${cActs.length})`} />
+      {cActs.length === 0 ? <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>Sin actividades.</div> :
+        cActs.map(a => <div key={a.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+          <div><div style={{ fontSize: 13 }}>{a.nota}</div><div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · {a.gestor}</div></div>
+        </div>)}
+      <Sep label={`Tareas (${cTasks.length})`} />
+      {cTasks.length === 0 ? <div style={{ fontSize: 12, color: "#888" }}>Sin tareas.</div> :
+        cTasks.map(t => <div key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
+          <span style={{ fontSize: 13, flex: 1 }}>{t.titulo}</span>
+          <Badge color={estadoColor[t.estado]} label={t.estado} />
+        </div>)}
+    </Card>
+  );
+}
+
+
+// ── MAIN ──────────────────────────────────────────────────────────────────────
+function CRM() {
+  const [tab, setTab] = useState("Dashboard");
+  const [config, setConfigState] = useState({ canales: [], grupos: [], gestores: [] });
+  const [clients, setClients] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [clientPanel, setClientPanel] = useState(null);
+  const [detalleId, setDetalleId] = useState(null);
+  const [actPanel, setActPanel] = useState(null);
+  const [taskPanel, setTaskPanel] = useState(null);
+  const [filter, setFilter] = useState({ canal: "", grupo: "", gestor: "" });
+  const [rptFilter, setRptFilter] = useState({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" });
+  const [newVal, setNewVal] = useState({ canal: "", grupo: "", gestor: "" });
+
+
+  const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
+
+
+  const loadAll = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const [cfgRows, cls, acts, tsk] = await Promise.all([
+        sbGet("config", "select=clave,valor"),
+        sbGet("clientes", "select=*&order=nombre.asc"),
+        sbGet("actividades", "select=*&order=fecha.desc"),
+        sbGet("tareas", "select=*&order=fecha.asc"),
+      ]);
+      const cfg = { canales: [], grupos: [], gestores: [] };
+      cfgRows.forEach(r => {
+        if (r.clave === "canales")  cfg.canales  = r.valor;
+        if (r.clave === "grupos")   cfg.grupos   = r.valor;
+        if (r.clave === "gestores") cfg.gestores = r.valor;
+      });
+      setConfigState(cfg); setClients(cls); setActivities(acts); setTasks(tsk);
+    } catch (e) { setError("No se pudo conectar. " + e.message); }
+    finally { setLoading(false); }
+  }, []);
+
+
+  useEffect(() => { loadAll(); }, [loadAll]);
+
+
+  async function saveConfig(key, arr) {
+    const rows = await sbGet("config", `clave=eq.${key}&select=id`);
+    if (rows.length) await sbPatch("config", rows[0].id, { valor: arr });
+    else await sbPost("config", { clave: key, valor: arr });
+    setConfigState(prev => ({ ...prev, [key]: arr }));
+  }
+  async function saveClient(form) {
+    setSaving(true);
+    try {
+      const body = { nombre: form.nombre, nif: form.nif, calle: form.calle, numero: form.numero, cp: form.cp, ciudad: form.ciudad, pais: form.pais, telefono: form.telefono, email: form.email, contacto: form.contacto, canal: form.canal, grupo: form.grupo, gestor: form.gestor };
+      if (form.id) await sbPatch("clientes", form.id, body);
+      else await sbPost("clientes", body);
+      await loadAll(); setClientPanel(null);
+    } catch (e) { alert("Error al guardar: " + e.message); }
+    finally { setSaving(false); }
+  }
+  async function deleteClient(id) {
+    if (!confirm("¿Eliminar este cliente y todos sus datos?")) return;
+    try { await sbDelete("clientes", id); await loadAll(); setDetalleId(null); }
+    catch (e) { alert("Error: " + e.message); }
+  }
+  async function saveActivity(form) {
+    setSaving(true);
+    try {
+      const body = { cliente_id: form.clienteId, tipo: form.tipo, nota: form.nota, fecha: form.fecha, gestor: form.gestor };
+      if (form.id) await sbPatch("actividades", form.id, body);
+      else await sbPost("actividades", body);
+      await loadAll(); setActPanel(null);
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setSaving(false); }
+  }
+  async function deleteActivity(id) {
+    try { await sbDelete("actividades", id); setActivities(p => p.filter(a => a.id !== id)); }
+    catch (e) { alert("Error: " + e.message); }
+  }
+  async function saveTask(form) {
+    setSaving(true);
+    try {
+      const body = { cliente_id: form.clienteId, titulo: form.titulo, fecha: form.fecha, prioridad: form.prioridad, estado: form.estado, gestor: form.gestor };
+      if (form.id) await sbPatch("tareas", form.id, body);
+      else await sbPost("tareas", body);
+      await loadAll(); setTaskPanel(null);
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setSaving(false); }
+  }
+  async function toggleTask(t) {
+    const estado = t.estado === "Completada" ? "Pendiente" : "Completada";
+    try { await sbPatch("tareas", t.id, { estado }); setTasks(p => p.map(x => x.id === t.id ? { ...x, estado } : x)); }
+    catch (e) { alert("Error: " + e.message); }
+  }
+  async function deleteTask(id) {
+    try { await sbDelete("tareas", id); setTasks(p => p.filter(t => t.id !== id)); }
+    catch (e) { alert("Error: " + e.message); }
+  }
+
+
+  const filteredClients = useMemo(() => clients.filter(c =>
+    (!filter.canal || c.canal === filter.canal) &&
+    (!filter.grupo || c.grupo === filter.grupo) &&
+    (!filter.gestor || c.gestor === filter.gestor)
+  ), [clients, filter]);
+
+
+  // ── TABS ──────────────────────────────────────────────────────────────────
+  function Dashboard() {
+    return <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
+        {[["Clientes", clients.length, "#185fa5"], ["Actividades", activities.length, "#1d9e75"], ["Tareas pendientes", tasks.filter(t => t.estado !== "Completada").length, "#ba7517"]].map(([l, v, c]) => (
+          <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 10, padding: "1rem", textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{l}</div>
+            <div style={{ fontSize: 28, fontWeight: 600, color: c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        <Card>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Últimas actividades</div>
+          {activities.slice(0, 5).map(a => (
+            <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+              <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+              <div><div style={{ fontSize: 13 }}>{clientName(a.cliente_id)}</div><div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · {a.gestor}</div></div>
+            </div>
+          ))}
+          {activities.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin actividades aún.</div>}
+        </Card>
+        <Card>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Próximas tareas</div>
+          {tasks.filter(t => t.estado !== "Completada").slice(0, 5).map(t => (
+            <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+              <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
+              <div><div style={{ fontSize: 13 }}>{t.titulo}</div><div style={{ fontSize: 11, color: "#888" }}>{clientName(t.cliente_id)} · {t.fecha}</div></div>
+            </div>
+          ))}
+          {tasks.filter(t => t.estado !== "Completada").length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin tareas pendientes.</div>}
+        </Card>
+      </div>
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Exportar datos</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn variant="success" onClick={() => downloadCSV(toCSV(clients, [
+            { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" }, { key: "telefono", label: "Teléfono" }, { key: "email", label: "Email" }, { key: "contacto", label: "Contacto" }, { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" }
+          ]), "clientes.csv")}>⬇ Clientes CSV</Btn>
+          <Btn variant="success" onClick={() => downloadCSV(toCSV(activities.map(a => ({ ...a, cliente: clientName(a.cliente_id) })), [
+            { key: "cliente", label: "Cliente" }, { key: "tipo", label: "Tipo" }, { key: "nota", label: "Nota" }, { key: "fecha", label: "Fecha" }, { key: "gestor", label: "Gestor" }
+          ]), "actividades.csv")}>⬇ Actividades CSV</Btn>
+          <Btn variant="success" onClick={() => downloadCSV(toCSV(tasks.map(t => ({ ...t, cliente: clientName(t.cliente_id) })), [
+            { key: "cliente", label: "Cliente" }, { key: "titulo", label: "Tarea" }, { key: "fecha", label: "Fecha" }, { key: "prioridad", label: "Prioridad" }, { key: "estado", label: "Estado" }, { key: "gestor", label: "Gestor" }
+          ]), "tareas.csv")}>⬇ Tareas CSV</Btn>
+          <Btn onClick={loadAll} style={{ marginLeft: "auto" }}>↻ Actualizar</Btn>
+        </div>
+      </Card>
+    </div>;
+  }
+
+
+  function TabClientes() {
+    return <div>
+      {clientPanel === "new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} />}
+      {clientPanel && clientPanel !== "new" && <ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} />}
+      {detalleId && !clientPanel && <DetalleCliente cliente={clients.find(c => c.id === detalleId)} activities={activities} tasks={tasks} onClose={() => setDetalleId(null)} />}
+      {!clientPanel && <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          <Sel value={filter.canal} onChange={v => setFilter(f => ({ ...f, canal: v }))} options={config.canales} placeholder="Canal" />
+          <Sel value={filter.grupo} onChange={v => setFilter(f => ({ ...f, grupo: v }))} options={config.grupos} placeholder="Grupo" />
+          <Sel value={filter.gestor} onChange={v => setFilter(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Gestor" />
+          <Btn onClick={() => setFilter({ canal: "", grupo: "", gestor: "" })}>Limpiar</Btn>
+          <Btn variant="primary" onClick={() => { setDetalleId(null); setClientPanel("new"); }} style={{ marginLeft: "auto" }}>+ Nuevo cliente</Btn>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10, overflow: "hidden" }}>
+            <thead style={{ background: "#f9f9f9" }}>
+              <tr>{["Empresa", "NIF", "Ciudad", "Contacto", "Canal", "Gestor", ""].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee" }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>{filteredClients.map(c => (
+              <tr key={c.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setDetalleId(c.id); }}>{c.nombre}</td>
+                <td style={{ padding: "9px 10px", color: "#888", fontSize: 12 }}>{c.nif}</td>
+                <td style={{ padding: "9px 10px", fontSize: 12, color: "#666" }}>{c.ciudad}</td>
+                <td style={{ padding: "9px 10px", fontSize: 12 }}>{c.contacto}</td>
+                <td style={{ padding: "9px 10px" }}><Badge color="#7f77dd" label={c.canal || "—"} /></td>
+                <td style={{ padding: "9px 10px", fontSize: 12 }}>{c.gestor}</td>
+                <td style={{ padding: "9px 10px" }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <Btn onClick={() => { setDetalleId(null); setClientPanel(c); }}>Editar</Btn>
+                    <Btn onClick={() => deleteClient(c.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
+                  </div>
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {filteredClients.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin clientes con esos filtros.</div>}
+        </div>
+      </>}
+    </div>;
+  }
+
+
+  function TabActividades() {
+    return <div>
+      {actPanel !== null && <ActividadForm initial={actPanel === "new" ? {} : { ...actPanel, clienteId: actPanel.cliente_id }} config={config} clients={clients} onSave={saveActivity} onCancel={() => setActPanel(null)} saving={saving} />}
+      <div style={{ display: "flex", marginBottom: 14 }}>
+        <Btn variant="primary" onClick={() => setActPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva actividad</Btn>
+      </div>
+      {activities.map(a => (
+        <div key={a.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+          <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{clientName(a.cliente_id)}</div>
+            <div style={{ fontSize: 13, color: "#555", marginTop: 2 }}>{a.nota}</div>
+            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{a.fecha} · {a.gestor}</div>
+          </div>
+          <Btn onClick={() => setActPanel(a)}>Editar</Btn>
+          <Btn onClick={() => deleteActivity(a.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
+        </div>
+      ))}
+      {activities.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin actividades aún.</div>}
+    </div>;
+  }
+
+
+  function TabTareas() {
+    return <div>
+      {taskPanel !== null && <TareaForm initial={taskPanel === "new" ? {} : { ...taskPanel, clienteId: taskPanel.cliente_id }} config={config} clients={clients} onSave={saveTask} onCancel={() => setTaskPanel(null)} saving={saving} />}
+      <div style={{ display: "flex", marginBottom: 14 }}>
+        <Btn variant="primary" onClick={() => setTaskPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva tarea</Btn>
+      </div>
+      {tasks.map(t => (
+        <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+          <input type="checkbox" checked={t.estado === "Completada"} onChange={() => toggleTask(t)} style={{ cursor: "pointer", width: 16, height: 16 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, textDecoration: t.estado === "Completada" ? "line-through" : "none", color: t.estado === "Completada" ? "#aaa" : "#1a1a1a" }}>{t.titulo}</div>
+            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{clientName(t.cliente_id)} · {t.fecha} · {t.gestor}</div>
+          </div>
+          <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
+          <Badge color={estadoColor[t.estado]} label={t.estado} />
+          <Btn onClick={() => setTaskPanel(t)}>Editar</Btn>
+          <Btn onClick={() => deleteTask(t.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
+        </div>
+      ))}
+      {tasks.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin tareas aún.</div>}
+    </div>;
+  }
+
+
+  function TabInformes() {
+    const fc = clients.filter(c =>
+      (!rptFilter.canal || c.canal === rptFilter.canal) &&
+      (!rptFilter.grupo || c.grupo === rptFilter.grupo) &&
+      (!rptFilter.gestor || c.gestor === rptFilter.gestor)
+    );
+    const rows = fc.map(c => {
+      const cActs = activities.filter(a => a.cliente_id === c.id && (!rptFilter.fechaDesde || a.fecha >= rptFilter.fechaDesde) && (!rptFilter.fechaHasta || a.fecha <= rptFilter.fechaHasta));
+      const cTasks = tasks.filter(t => t.cliente_id === c.id && (!rptFilter.estado || t.estado === rptFilter.estado));
+      const ultima = cActs.length ? cActs[0].fecha : "—";
+      return { ...c, numActs: cActs.length, numTasks: cTasks.length, ultima, tasksPend: tasks.filter(t => t.cliente_id === c.id && t.estado !== "Completada").length };
+    });
+    return <div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "flex-end" }}>
+        {[["Canal", "canal", config.canales], ["Grupo", "grupo", config.grupos], ["Gestor", "gestor", config.gestores], ["Estado tarea", "estado", ESTADOS_TAREA]].map(([l, k, opts]) => (
+          <div key={k} style={{ flex: "1 1 120px" }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 3 }}>{l}</div>
+            <Sel value={rptFilter[k]} onChange={v => setRptFilter(f => ({ ...f, [k]: v }))} options={opts} placeholder="Todos" />
+          </div>
+        ))}
+        {[["fechaDesde", "Activ. desde"], ["fechaHasta", "Activ. hasta"]].map(([k, l]) => (
+          <div key={k} style={{ flex: "1 1 120px" }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 3 }}>{l}</div>
+            <Inp type="date" value={rptFilter[k]} onChange={v => setRptFilter(f => ({ ...f, [k]: v }))} />
+          </div>
+        ))}
+        <Btn onClick={() => setRptFilter({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" })}>Limpiar</Btn>
+        <Btn variant="success" onClick={() => downloadCSV(toCSV(rows, [
+          { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" },
+          { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" },
+          { key: "numActs", label: "Actividades" }, { key: "numTasks", label: "Tareas" }, { key: "tasksPend", label: "Pendientes" }, { key: "ultima", label: "Última actividad" }
+        ]), "informe.csv")}>⬇ Exportar CSV</Btn>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
+        {[["Clientes", rows.length, "#185fa5"], ["Actividades", rows.reduce((s, r) => s + r.numActs, 0), "#1d9e75"], ["Tareas", rows.reduce((s, r) => s + r.numTasks, 0), "#7f77dd"], ["Pendientes", rows.reduce((s, r) => s + r.tasksPend, 0), "#ba7517"]].map(([l, v, c]) => (
+          <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "0.75rem 1rem" }}>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 600, color: c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
+          <thead style={{ background: "#f9f9f9" }}>
+            <tr>{["Empresa", "NIF", "Canal", "Grupo", "Gestor", "Actividades", "Tareas", "Pend.", "Última activ."].map(h => (
+              <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>{h}</th>
+            ))}</tr>
+          </thead>
+          <tbody>{rows.map(r => (
+            <tr key={r.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
+              <td style={{ padding: "9px 10px", fontWeight: 500 }}>{r.nombre}</td>
+              <td style={{ padding: "9px 10px", fontSize: 12, color: "#888" }}>{r.nif}</td>
+              <td style={{ padding: "9px 10px" }}><Badge color="#7f77dd" label={r.canal || "—"} /></td>
+              <td style={{ padding: "9px 10px" }}><Badge color="#1d9e75" label={r.grupo || "—"} /></td>
+              <td style={{ padding: "9px 10px", fontSize: 12 }}>{r.gestor}</td>
+              <td style={{ padding: "9px 10px", textAlign: "center", color: r.numActs > 0 ? "#1d9e75" : "#aaa", fontWeight: 600 }}>{r.numActs}</td>
+              <td style={{ padding: "9px 10px", textAlign: "center" }}>{r.numTasks}</td>
+              <td style={{ padding: "9px 10px", textAlign: "center", color: r.tasksPend > 0 ? "#ba7517" : "#aaa", fontWeight: 600 }}>{r.tasksPend}</td>
+              <td style={{ padding: "9px 10px", fontSize: 12 }}>{r.ultima}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+        {rows.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin resultados.</div>}
+      </div>
+    </div>;
+  }
+
+
+  function TabConfiguracion() {
+    const sections = [["Canales", "canal", "canales", "#7f77dd"], ["Grupos gestores", "grupo", "grupos", "#1d9e75"], ["Gestores", "gestor", "gestores", "#378add"]];
+    return <div>
+      {sections.map(([label, ckey, k, color]) => (
+        <div key={ckey} style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{label}</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <Inp value={newVal[ckey]} onChange={v => setNewVal(n => ({ ...n, [ckey]: v }))} placeholder={`Nuevo...`} />
+            <Btn variant="primary" onClick={async () => {
+              const v = newVal[ckey].trim();
+              if (!v || config[k].includes(v)) return;
+              await saveConfig(k, [...config[k], v]);
+              setNewVal(n => ({ ...n, [ckey]: "" }));
+            }}>Añadir</Btn>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {config[k].map(v => (
+              <span key={v} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 16, background: color + "18", border: "1px solid " + color + "44", fontSize: 13 }}>
+                <span style={{ color }}>{v}</span>
+                <button onClick={async () => await saveConfig(k, config[k].filter(x => x !== v))}
+                  style={{ background: "none", border: "none", cursor: "pointer", color, fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>;
+  }
+
+
+  return (
+    <div>
+      {/* HEADER */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid #e8e8e8" }}>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a1a" }}>CRM Panificadora La Sin Gluten</div>
+          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>Gestión de clientes B2B</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 9, height: 9, borderRadius: "50%", background: loading ? "#ba7517" : error ? "#e24b4a" : "#1d9e75" }} />
+          <span style={{ fontSize: 12, color: "#888" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado · Supabase"}</span>
+        </div>
+      </div>
+      {/* TABS */}
+      <div style={{ display: "flex", gap: 2, marginBottom: 24, borderBottom: "1px solid #e8e8e8", overflowX: "auto" }}>
+        {TABS.map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: "8px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: tab === t ? 600 : 400, color: tab === t ? "#185fa5" : "#666", borderBottom: tab === t ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1, whiteSpace: "nowrap" }}>{t}</button>
+        ))}
+      </div>
+      {/* CONTENT */}
+      {loading ? <Spinner /> : error ? <ErrMsg msg={error} onRetry={loadAll} /> : <>
+        {tab === "Dashboard"     && <Dashboard />}
+        {tab === "Clientes"      && <TabClientes />}
+        {tab === "Actividades"   && <TabActividades />}
+        {tab === "Tareas"        && <TabTareas />}
+        {tab === "Informes"      && <TabInformes />}
+        {tab === "Configuración" && <TabConfiguracion />}
+      </>}
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(<CRM />);
+</script>
+</body>
+</html>
