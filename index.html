@@ -22,7 +22,6 @@
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
 const H = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}`, "Prefer": "return=representation" };
@@ -47,45 +46,18 @@ async function sbDelete(table, id) {
   if (!r.ok) throw new Error(await r.text());
 }
 
-create table usuarios (
-  id serial primary key,
-  nombre text unique not null,
-  password text not null,
-  admin boolean default false,
-  created_at timestamptz default now()
-);
-
-insert into usuarios (nombre, password, admin) values
-  ('Rodrigo',  'LSG2026r',  false),
-  ('Miriam',   'LSG2026m',  false),
-  ('Alex',     'LSG2026a',  false),
-  ('Fernando', 'LSG2026f',  false),
-  ('Maru',     'LSG2026u',  true);
-
-alter table usuarios enable row level security;
-create policy "acceso_total" on usuarios for all using (true) with check (true);
-  
-// ── Usuarios ──────────────────────────────────────────────────────────────────
-const USERS = {
-  Rodrigo:  { pass: "LSG2026r",  admin: false },
-  Miriam:   { pass: "LSG2026m",  admin: false },
-  Alex:     { pass: "LSG2026a",  admin: false },
-  Fernando: { pass: "LSG2026f",  admin: false },
-  Maru:     { pass: "LSG2026u",  admin: true  },
-};
-
-// ── Constantes ────────────────────────────────────────────────────────────────
 const TIPOS = ["Llamada", "Email", "Reunión", "Nota"];
 const PRIORIDADES = ["Alta", "Media", "Baja"];
 const ESTADOS_TAREA = ["Pendiente", "En curso", "Completada"];
+const ESTADOS_ACT = ["Pendiente", "En curso", "Completada"];
 const TABS = ["Dashboard", "Clientes", "Actividades", "Tareas", "Informes", "Configuración"];
-const EXCEL_COLS = ["nombre","nif","calle","numero","cp","ciudad","pais","telefono","email","contacto","canal","grupo","gestor"];
-
 const prioColor   = { Alta: "#e24b4a", Media: "#ba7517", Baja: "#1d9e75" };
 const estadoColor = { Pendiente: "#378add", "En curso": "#ba7517", Completada: "#1d9e75" };
 const tipoColor   = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Nota: "#888780" };
 const normalize   = s => s?.trim().toLowerCase().replace(/\s+/g, " ");
 const emptyClient = { nombre: "", nif: "", calle: "", numero: "", cp: "", ciudad: "", pais: "España", telefono: "", email: "", contacto: "", canal: "", grupo: "", gestor: "" };
+const today = () => new Date().toISOString().slice(0, 10);
+const diffDays = f => Math.ceil((new Date(f) - new Date(today())) / 86400000);
 
 function toCSV(rows, cols) {
   const h = cols.map(c => c.label).join(",");
@@ -98,13 +70,8 @@ function downloadCSV(content, filename) {
   const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
-function today() { return new Date().toISOString().slice(0, 10); }
-function diffDays(fecha) {
-  const d = new Date(fecha) - new Date(today());
-  return Math.ceil(d / (1000 * 60 * 60 * 24));
-}
 
-// ── UI primitivos ─────────────────────────────────────────────────────────────
+// ── UI ────────────────────────────────────────────────────────────────────────
 function Badge({ color, label }) {
   return <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: color + "22", color, fontWeight: 500, whiteSpace: "nowrap" }}>{label}</span>;
 }
@@ -148,31 +115,39 @@ function Card({ children, style }) {
 function Spinner() {
   return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "4rem", color: "#888", fontSize: 13, gap: 10 }}>
     <div style={{ width: 20, height: 20, border: "2px solid #ddd", borderTopColor: "#185fa5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-    Conectando con la base de datos…
+    Conectando…
   </div>;
 }
 function ErrMsg({ msg, onRetry }) {
   return <div style={{ padding: "1rem", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, color: "#b91c1c", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-    <span>⚠️ {msg}</span>
-    {onRetry && <Btn onClick={onRetry}>Reintentar</Btn>}
+    <span>⚠️ {msg}</span>{onRetry && <Btn onClick={onRetry}>Reintentar</Btn>}
   </div>;
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function Login({ onLogin }) {
-  const [users, setUsers] = useState(() => {
-    try { const s = localStorage.getItem("crm_users"); return s ? JSON.parse(s) : USERS; } catch { return USERS; }
-  });
   const [gestor, setGestor] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [usuarios, setUsuarios] = useState([]);
 
-  function handleLogin() {
+  useEffect(() => {
+    sbGet("usuarios", "select=nombre&order=nombre.asc").then(rows => setUsuarios(rows.map(r => r.nombre))).catch(() => {});
+  }, []);
+
+  async function handleLogin() {
     if (!gestor) { setError("Selecciona tu nombre"); return; }
     if (!pass) { setError("Ingresa tu contraseña"); return; }
-    const u = users[gestor];
-    if (!u || u.pass !== pass) { setError("Contraseña incorrecta"); return; }
-    onLogin({ nombre: gestor, admin: u.admin, users, setUsers });
+    setLoading(true);
+    try {
+      const rows = await sbGet("usuarios", `nombre=eq.${encodeURIComponent(gestor)}&select=nombre,password,admin`);
+      if (!rows.length || rows[0].password !== pass) { setError("Contraseña incorrecta"); setLoading(false); return; }
+      const u = { nombre: rows[0].nombre, admin: rows[0].admin };
+      sessionStorage.setItem("crm_session", JSON.stringify(u));
+      onLogin(u);
+    } catch (e) { setError("Error de conexión"); }
+    finally { setLoading(false); }
   }
 
   return (
@@ -182,60 +157,97 @@ function Login({ onLogin }) {
           <div style={{ width: 90, height: 90, borderRadius: "50%", overflow: "hidden", margin: "0 auto 1rem", border: "3px solid #8ecfd4" }}>
             <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a" }}>CRM Panificadora</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>CRM Panificadora</div>
           <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>La Sin Gluten</div>
         </div>
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Tu nombre</div>
-          <Sel value={gestor} onChange={v => { setGestor(v); setError(""); }} options={Object.keys(users)} placeholder="Selecciona tu nombre" />
+          <Sel value={gestor} onChange={v => { setGestor(v); setError(""); }} options={usuarios} placeholder="Selecciona tu nombre" />
         </div>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Contraseña</div>
           <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(""); }}
-            onKeyDown={e => e.key === "Enter" && handleLogin()}
-            placeholder="Tu contraseña"
-            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }} />
+            onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Tu contraseña"
+            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: "100%" }} />
         </div>
         {error && <div style={{ fontSize: 12, color: "#e24b4a", marginBottom: 12, textAlign: "center" }}>{error}</div>}
-        <Btn variant="primary" onClick={handleLogin} style={{ width: "100%", padding: "10px", fontSize: 14 }}>Entrar</Btn>
+        <Btn variant="primary" onClick={handleLogin} disabled={loading} style={{ width: "100%", padding: "10px", fontSize: 14 }}>{loading ? "Verificando…" : "Entrar"}</Btn>
       </div>
     </div>
   );
 }
 
+// ── ADMIN PANEL ───────────────────────────────────────────────────────────────
+function AdminPanel() {
+  const [usuarios, setUsuarios] = useState([]);
+  const [newPasses, setNewPasses] = useState({});
+  const [saved, setSaved] = useState({});
+
+  useEffect(() => {
+    sbGet("usuarios", "select=id,nombre,admin&order=nombre.asc").then(setUsuarios).catch(() => {});
+  }, []);
+
+  async function savePass(u) {
+    const np = newPasses[u.id]?.trim();
+    if (!np || np.length < 4) { alert("La contraseña debe tener al menos 4 caracteres"); return; }
+    try {
+      await sbPatch("usuarios", u.id, { password: np });
+      setNewPasses(p => ({ ...p, [u.id]: "" }));
+      setSaved(s => ({ ...s, [u.id]: true }));
+      setTimeout(() => setSaved(s => ({ ...s, [u.id]: false })), 2000);
+    } catch (e) { alert("Error: " + e.message); }
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, color: "#555" }}>🔐 Gestión de contraseñas</div>
+      {usuarios.map(u => (
+        <div key={u.id} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #eee" }}>
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{u.nombre} {u.admin && <Badge color="#185fa5" label="Admin" />}</div>
+          <input type="password" value={newPasses[u.id] || ""} onChange={e => setNewPasses(p => ({ ...p, [u.id]: e.target.value }))}
+            placeholder="Nueva contraseña" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: 180 }} />
+          <Btn variant="primary" onClick={() => savePass(u)}>{saved[u.id] ? "✓ Guardado" : "Cambiar"}</Btn>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── NOTIFICACIONES ────────────────────────────────────────────────────────────
-function NotifBanner({ tasks, clients }) {
+function NotifBanner({ tasks, clients, filterGestor }) {
   const alertas = useMemo(() => {
-    const hoy = today();
-    return tasks.filter(t => t.estado !== "Completada").map(t => {
-      const d = diffDays(t.fecha);
-      if (d < 0) return { ...t, tipo: "vencida", label: `Vencida hace ${Math.abs(d)} día${Math.abs(d) !== 1 ? "s" : ""}` };
-      if (d === 0) return { ...t, tipo: "hoy", label: "Vence hoy" };
-      if (d <= 3) return { ...t, tipo: "proxima", label: `Vence en ${d} día${d !== 1 ? "s" : ""}` };
-      return null;
-    }).filter(Boolean).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  }, [tasks]);
+    return tasks
+      .filter(t => t.estado !== "Completada" && (!filterGestor || t.gestor === filterGestor))
+      .map(t => {
+        const d = diffDays(t.fecha);
+        if (d < 0) return { ...t, tipo: "vencida", label: `Vencida hace ${Math.abs(d)} día${Math.abs(d) !== 1 ? "s" : ""}` };
+        if (d === 0) return { ...t, tipo: "hoy", label: "Vence hoy" };
+        if (d <= 3) return { ...t, tipo: "proxima", label: `Vence en ${d} día${d !== 1 ? "s" : ""}` };
+        return null;
+      }).filter(Boolean).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }, [tasks, filterGestor]);
 
   const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
   const [visible, setVisible] = useState(true);
+  useEffect(() => setVisible(true), [filterGestor]);
   if (!alertas.length || !visible) return null;
-
-  const bgColor = alertas.some(a => a.tipo === "vencida") ? "#fef2f2" : alertas.some(a => a.tipo === "hoy") ? "#fff7ed" : "#fffbeb";
-  const borderColor = alertas.some(a => a.tipo === "vencida") ? "#fca5a5" : alertas.some(a => a.tipo === "hoy") ? "#fed7aa" : "#fde68a";
-  const icon = alertas.some(a => a.tipo === "vencida") ? "🔴" : alertas.some(a => a.tipo === "hoy") ? "🟠" : "🟡";
-
+  const isVenc = alertas.some(a => a.tipo === "vencida");
+  const isHoy  = alertas.some(a => a.tipo === "hoy");
+  const bg     = isVenc ? "#fef2f2" : isHoy ? "#fff7ed" : "#fffbeb";
+  const border = isVenc ? "#fca5a5" : isHoy ? "#fed7aa" : "#fde68a";
+  const icon   = isVenc ? "🔴" : isHoy ? "🟠" : "🟡";
   return (
-    <div style={{ background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: 16, animation: "slideIn 0.3s ease" }}>
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: 16, animation: "slideIn 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{icon} {alertas.length} tarea{alertas.length !== 1 ? "s" : ""} requieren atención</div>
           {alertas.slice(0, 3).map(a => (
-            <div key={a.id} style={{ fontSize: 12, color: "#555", marginBottom: 3, display: "flex", gap: 8 }}>
-              <Badge color={a.tipo === "vencida" ? "#e24b4a" : a.tipo === "hoy" ? "#ba7517" : "#d97706"} label={a.label} />
-              <span>{a.titulo} — {clientName(a.cliente_id)} · {a.gestor}</span>
+            <div key={a.id} style={{ fontSize: 12, color: "#555", marginBottom: 3, display: "flex", gap: 8, alignItems: "center" }}>
+              <Badge color={isVenc ? "#e24b4a" : isHoy ? "#ba7517" : "#d97706"} label={a.label} />
+              <span>{a.titulo} — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
             </div>
           ))}
-          {alertas.length > 3 && <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>...y {alertas.length - 3} más. Ve a Tareas para verlas todas.</div>}
+          {alertas.length > 3 && <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>...y {alertas.length - 3} más.</div>}
         </div>
         <button onClick={() => setVisible(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#888", fontSize: 18, marginLeft: 12 }}>×</button>
       </div>
@@ -255,7 +267,7 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Email no válido";
     if (!form.contacto.trim()) errs.contacto = "Obligatorio";
     const others = clients.filter(c => c.id !== form.id);
-    if (form.nombre.trim() && others.some(c => normalize(c.nombre) === normalize(form.nombre))) errs.nombre = "Ya existe ese nombre";
+    if (form.nombre.trim() && others.some(c => normalize(c.nombre) === normalize(form.nombre))) errs.nombre = "Ya existe";
     if (form.nif.trim() && others.some(c => normalize(c.nif) === normalize(form.nif))) errs.nif = "NIF ya registrado";
     return errs;
   }
@@ -267,12 +279,12 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
         <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
       </div>
       <FRow>
-        <FL label="Nombre de empresa *" flex={2} error={errors.nombre}><Inp value={form.nombre} onChange={v => set("nombre", v)} placeholder="Nombre de la empresa" error={errors.nombre} /></FL>
+        <FL label="Nombre de empresa *" flex={2} error={errors.nombre}><Inp value={form.nombre} onChange={v => set("nombre", v)} placeholder="Nombre empresa" error={errors.nombre} /></FL>
         <FL label="NIF *" flex={1} error={errors.nif}><Inp value={form.nif} onChange={v => set("nif", v)} placeholder="A12345678" error={errors.nif} /></FL>
       </FRow>
       <Sep label="Dirección" />
       <FRow>
-        <FL label="Calle" flex={3}><Inp value={form.calle} onChange={v => set("calle", v)} placeholder="Nombre de la calle" /></FL>
+        <FL label="Calle" flex={3}><Inp value={form.calle} onChange={v => set("calle", v)} placeholder="Calle" /></FL>
         <FL label="Número" flex={1}><Inp value={form.numero} onChange={v => set("numero", v)} placeholder="Nº" /></FL>
       </FRow>
       <FRow>
@@ -289,7 +301,7 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
       <Sep label="Clasificación" />
       <FRow>
         <FL label="Canal" flex={1}><Sel value={form.canal} onChange={v => set("canal", v)} options={config.canales} placeholder="Seleccionar" /></FL>
-        <FL label="Grupo gestor" flex={1}><Sel value={form.grupo} onChange={v => set("grupo", v)} options={config.grupos} placeholder="Seleccionar" /></FL>
+        <FL label="Grupo" flex={1}><Sel value={form.grupo} onChange={v => set("grupo", v)} options={config.grupos} placeholder="Seleccionar" /></FL>
         <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={v => set("gestor", v)} options={config.gestores} placeholder="Seleccionar" /></FL>
       </FRow>
       <Btn variant="primary" onClick={handleSave} disabled={saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
@@ -299,7 +311,7 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
 
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
 function ActividadForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
-  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: today(), gestor: currentUser.nombre, clienteId: "", ...initial }));
+  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: today(), gestor: currentUser.nombre, clienteId: "", estado: "Pendiente", ...initial }));
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
   const handleGestorChange = v => {
@@ -325,8 +337,11 @@ function ActividadForm({ initial, config, clients, onSave, onCancel, saving, cur
         </FL>
         <FL label="Tipo" flex={1}><Sel value={form.tipo} onChange={v => set("tipo", v)} options={TIPOS} /></FL>
       </FRow>
-      <FRow><FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL></FRow>
-      <FRow><FL label="Nota / Descripción" flex={1}><Textarea value={form.nota} onChange={v => set("nota", v)} placeholder="Describe la actividad realizada…" /></FL></FRow>
+      <FRow>
+        <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL>
+        <FL label="Estado" flex={1}><Sel value={form.estado} onChange={v => set("estado", v)} options={ESTADOS_ACT} /></FL>
+      </FRow>
+      <FRow><FL label="Nota / Descripción" flex={1}><Textarea value={form.nota} onChange={v => set("nota", v)} placeholder="Describe la actividad…" /></FL></FRow>
       <Btn variant="primary" onClick={() => canSave && onSave({ ...form, clienteId: +form.clienteId })} disabled={!canSave || saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
     </Card>
   );
@@ -359,7 +374,7 @@ function TareaForm({ initial, config, clients, onSave, onCancel, saving, current
           </select>
         </FL>
       </FRow>
-      <FRow><FL label="Título de la tarea" flex={1}><Inp value={form.titulo} onChange={v => set("titulo", v)} placeholder="Describe la tarea a realizar" /></FL></FRow>
+      <FRow><FL label="Título de la tarea" flex={1}><Inp value={form.titulo} onChange={v => set("titulo", v)} placeholder="Describe la tarea" /></FL></FRow>
       <FRow>
         <FL label="Fecha límite" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL>
         <FL label="Prioridad" flex={1}><Sel value={form.prioridad} onChange={v => set("prioridad", v)} options={PRIORIDADES} /></FL>
@@ -370,11 +385,13 @@ function TareaForm({ initial, config, clients, onSave, onCancel, saving, current
   );
 }
 
-// ── Detalle Cliente ───────────────────────────────────────────────────────────
+// ── DETALLE CLIENTE ───────────────────────────────────────────────────────────
 function DetalleCliente({ cliente, activities, tasks, onClose }) {
   const cActs = activities.filter(a => a.cliente_id === cliente.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
   const cTasks = tasks.filter(t => t.cliente_id === cliente.id);
-  const dir = [cliente.calle, cliente.numero].filter(Boolean).join(" ") + ([cliente.cp, cliente.ciudad].filter(Boolean).length ? ", " + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ") : "") + (cliente.pais ? ", " + cliente.pais : "");
+  const dir = [cliente.calle, cliente.numero].filter(Boolean).join(" ") +
+    ([cliente.cp, cliente.ciudad].filter(Boolean).length ? ", " + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ") : "") +
+    (cliente.pais ? ", " + cliente.pais : "");
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -387,15 +404,21 @@ function DetalleCliente({ cliente, activities, tasks, onClose }) {
         {cliente.gestor && <Badge color="#378add" label={cliente.gestor} />}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px", fontSize: 13, marginBottom: 14 }}>
-        {[["NIF", cliente.nif], ["Teléfono", cliente.telefono], ["Email", cliente.email], ["Contacto", cliente.contacto]].map(([l, v]) => (
-          <div key={l}><span style={{ fontSize: 11, color: "#888" }}>{l}: </span>{v || "—"}</div>
-        ))}
+        <div><span style={{ fontSize: 11, color: "#888" }}>NIF: </span>{cliente.nif || "—"}</div>
+        <div><span style={{ fontSize: 11, color: "#888" }}>Teléfono: </span>
+          {cliente.telefono ? <a href={`tel:${cliente.telefono}`} style={{ color: "#185fa5", textDecoration: "none" }}>{cliente.telefono}</a> : "—"}
+        </div>
+        <div><span style={{ fontSize: 11, color: "#888" }}>Email: </span>
+          {cliente.email ? <a href={`mailto:${cliente.email}`} style={{ color: "#185fa5", textDecoration: "none" }}>{cliente.email}</a> : "—"}
+        </div>
+        <div><span style={{ fontSize: 11, color: "#888" }}>Contacto: </span>{cliente.contacto || "—"}</div>
         <div style={{ gridColumn: "1/-1" }}><span style={{ fontSize: 11, color: "#888" }}>Dirección: </span>{dir || "—"}</div>
       </div>
       <Sep label={`Actividades (${cActs.length})`} />
       {cActs.length === 0 ? <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>Sin actividades.</div> :
-        cActs.map(a => <div key={a.id} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        cActs.map(a => <div key={a.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
           <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+          <Badge color={estadoColor[a.estado || "Pendiente"]} label={a.estado || "Pendiente"} />
           <div><div style={{ fontSize: 13 }}>{a.nota}</div><div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · {a.gestor}</div></div>
         </div>)}
       <Sep label={`Tareas (${cTasks.length})`} />
@@ -406,40 +429,6 @@ function DetalleCliente({ cliente, activities, tasks, onClose }) {
           <Badge color={estadoColor[t.estado]} label={t.estado} />
         </div>)}
     </Card>
-  );
-}
-
-// ── ADMIN: Gestión de contraseñas ─────────────────────────────────────────────
-function AdminPanel({ currentUser }) {
-  const [users, setUsers] = useState(() => {
-    try { const s = localStorage.getItem("crm_users"); return s ? JSON.parse(s) : USERS; } catch { return USERS; }
-  });
-  const [newPasses, setNewPasses] = useState({});
-  const [saved, setSaved] = useState({});
-
-  function savePass(nombre) {
-    const np = newPasses[nombre]?.trim();
-    if (!np || np.length < 4) { alert("La contraseña debe tener al menos 4 caracteres"); return; }
-    const updated = { ...users, [nombre]: { ...users[nombre], pass: np } };
-    setUsers(updated);
-    localStorage.setItem("crm_users", JSON.stringify(updated));
-    setNewPasses(p => ({ ...p, [nombre]: "" }));
-    setSaved(s => ({ ...s, [nombre]: true }));
-    setTimeout(() => setSaved(s => ({ ...s, [nombre]: false })), 2000);
-  }
-
-  return (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, color: "#555" }}>🔐 Gestión de contraseñas</div>
-      {Object.keys(users).map(nombre => (
-        <div key={nombre} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #eee" }}>
-          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{nombre} {users[nombre].admin && <Badge color="#185fa5" label="Admin" />}</div>
-          <input type="password" value={newPasses[nombre] || ""} onChange={e => setNewPasses(p => ({ ...p, [nombre]: e.target.value }))}
-            placeholder="Nueva contraseña" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: 180 }} />
-          <Btn variant="primary" onClick={() => savePass(nombre)}>{saved[nombre] ? "✓ Guardado" : "Cambiar"}</Btn>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -458,23 +447,34 @@ function ImportExcel({ config, clients, onImport, onClose }) {
       try {
         const wb = XLSX.read(evt.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        const dataRows = rows.slice(1).filter(r => r.some(c => c !== undefined && c !== ""));
-        const mapped = dataRows.map(r => ({
-          nombre:   String(r[0] || "").trim(),
-          nif:      String(r[1] || "").trim(),
-          calle:    String(r[2] || "").trim(),
-          numero:   String(r[3] || "").trim(),
-          cp:       String(r[4] || "").trim(),
-          ciudad:   String(r[5] || "").trim(),
-          pais:     String(r[6] || "España").trim() || "España",
-          telefono: String(r[7] || "").trim(),
-          email:    String(r[8] || "").trim(),
-          contacto: String(r[9] || "").trim(),
-          canal:    String(r[10] || "").trim(),
-          grupo:    String(r[11] || "").trim(),
-          gestor:   String(r[12] || "").trim(),
-        })).filter(r => r.nombre);
+        // Usar sheet_to_json con defval "" para manejar celdas vacías
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const mapped = rows.map(r => {
+          // Buscar columnas por nombre (case insensitive) o por posición
+          const keys = Object.keys(r);
+          const get = (idx, names) => {
+            for (const n of names) {
+              const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase()));
+              if (k !== undefined) return String(r[k] || "").trim();
+            }
+            return String(r[keys[idx]] || "").trim();
+          };
+          return {
+            nombre:   get(0, ["nombre","empresa","company"]),
+            nif:      get(1, ["nif","cif","vat"]),
+            calle:    get(2, ["calle","street","direccion"]),
+            numero:   get(3, ["numero","número","num"]),
+            cp:       get(4, ["cp","postal","código postal"]),
+            ciudad:   get(5, ["ciudad","city","poblacion"]),
+            pais:     get(6, ["pais","país","country"]) || "España",
+            telefono: get(7, ["telefono","teléfono","phone","tel"]),
+            email:    get(8, ["email","mail","correo"]),
+            contacto: get(9, ["contacto","contact","persona"]),
+            canal:    get(10, ["canal","channel"]),
+            grupo:    get(11, ["grupo","group"]),
+            gestor:   get(12, ["gestor","manager"]),
+          };
+        }).filter(r => r.nombre);
         setPreview(mapped);
         setResult(null);
       } catch (err) { alert("Error leyendo el archivo: " + err.message); }
@@ -487,12 +487,13 @@ function ImportExcel({ config, clients, onImport, onClose }) {
     setImporting(true);
     let ok = 0, skip = 0, err = 0;
     for (const row of preview) {
-      const existe = clients.some(c => normalize(c.nif) === normalize(row.nif) || normalize(c.nombre) === normalize(row.nombre));
+      const existe = clients.some(c =>
+        (row.nif && normalize(c.nif) === normalize(row.nif)) ||
+        normalize(c.nombre) === normalize(row.nombre)
+      );
       if (existe) { skip++; continue; }
-      try {
-        await sbPost("clientes", row);
-        ok++;
-      } catch { err++; }
+      try { await sbPost("clientes", row); ok++; }
+      catch { err++; }
     }
     setImporting(false);
     setResult({ ok, skip, err });
@@ -502,7 +503,8 @@ function ImportExcel({ config, clients, onImport, onClose }) {
   function downloadTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
       ["Nombre empresa","NIF","Calle","Número","CP","Ciudad","País","Teléfono","Email","Contacto","Canal","Grupo","Gestor"],
-      ["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","932000001","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo"]
+      ["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","932000001","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo"],
+      ["Solo Nombre SL","","","","","","","","","Contacto","","",""],
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Clientes");
@@ -515,21 +517,21 @@ function ImportExcel({ config, clients, onImport, onClose }) {
         <span style={{ fontSize: 15, fontWeight: 600 }}>📥 Importar clientes desde Excel</span>
         <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
       </div>
-      <div style={{ fontSize: 13, color: "#555", marginBottom: 12 }}>
-        El archivo Excel debe tener estas columnas en orden (la primera fila es el encabezado, los campos pueden estar vacíos excepto <strong>Nombre empresa</strong>):
+      <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>
+        Solo <strong>Nombre empresa</strong> es obligatorio. El resto de campos pueden estar vacíos y se completan después.
       </div>
-      <div style={{ fontSize: 12, background: "#f5f5f5", padding: "8px 12px", borderRadius: 8, marginBottom: 16, color: "#555", fontFamily: "monospace" }}>
+      <div style={{ fontSize: 12, background: "#f5f5f5", padding: "8px 12px", borderRadius: 8, marginBottom: 16, color: "#555", fontFamily: "monospace", overflowX: "auto", whiteSpace: "nowrap" }}>
         Nombre empresa | NIF | Calle | Número | CP | Ciudad | País | Teléfono | Email | Contacto | Canal | Grupo | Gestor
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <Btn variant="success" onClick={downloadTemplate}>⬇ Descargar plantilla Excel</Btn>
-        <Btn variant="primary" onClick={() => fileRef.current.click()}>📂 Seleccionar archivo</Btn>
+        <Btn variant="success" onClick={downloadTemplate}>⬇ Descargar plantilla</Btn>
+        <Btn variant="primary" onClick={() => { fileRef.current.value = ""; fileRef.current.click(); }}>📂 Seleccionar archivo</Btn>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: "none" }} />
       </div>
       {preview && (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} cliente{preview.length !== 1 ? "s" : ""} encontrados</div>
-          <div style={{ overflowX: "auto", maxHeight: 220, overflowY: "auto", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} cliente{preview.length !== 1 ? "s" : ""} detectados</div>
+          <div style={{ overflowX: "auto", maxHeight: 220, overflowY: "auto", marginBottom: 12, border: "1px solid #eee", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ background: "#f9f9f9", position: "sticky", top: 0 }}>
                 <tr>{["Empresa","NIF","Ciudad","Email","Contacto","Gestor"].map(h => (
@@ -537,8 +539,8 @@ function ImportExcel({ config, clients, onImport, onClose }) {
                 ))}</tr>
               </thead>
               <tbody>{preview.map((r, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                  <td style={{ padding: "5px 8px" }}>{r.nombre || "—"}</td>
+                <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
+                  <td style={{ padding: "5px 8px", fontWeight: 500 }}>{r.nombre}</td>
                   <td style={{ padding: "5px 8px", color: "#888" }}>{r.nif || "—"}</td>
                   <td style={{ padding: "5px 8px", color: "#888" }}>{r.ciudad || "—"}</td>
                   <td style={{ padding: "5px 8px", color: "#888" }}>{r.email || "—"}</td>
@@ -550,11 +552,11 @@ function ImportExcel({ config, clients, onImport, onClose }) {
           </div>
           {result ? (
             <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>
-              ✅ Importación completada — <strong>{result.ok}</strong> importados, <strong>{result.skip}</strong> omitidos (ya existían), <strong>{result.err}</strong> errores
+              ✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos (ya existían) · <strong>{result.err}</strong> errores
             </div>
           ) : (
             <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>
-              {importing ? "Importando…" : `Importar ${preview.length} cliente${preview.length !== 1 ? "s" : ""}`}
+              {importing ? `Importando… (puede tardar unos segundos)` : `Importar ${preview.length} cliente${preview.length !== 1 ? "s" : ""}`}
             </Btn>
           )}
         </div>
@@ -565,7 +567,10 @@ function ImportExcel({ config, clients, onImport, onClose }) {
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
-  const [currentUser, setCurrentUser] = useState(null);
+  // Sesión persistente — se mantiene hasta que el usuario cierra sesión
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { const s = sessionStorage.getItem("crm_session"); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
   const [tab, setTab] = useState("Dashboard");
   const [config, setConfigState] = useState({ canales: [], grupos: [], gestores: [] });
   const [clients, setClients] = useState([]);
@@ -580,6 +585,9 @@ function CRM() {
   const [taskPanel, setTaskPanel] = useState(null);
   const [showImport, setShowImport] = useState(false);
   const [filter, setFilter] = useState({ canal: "", grupo: "", gestor: "" });
+  const [dashGestor, setDashGestor] = useState("");
+  const [actFiltro, setActFiltro] = useState({ gestor: "", estado: "" });
+  const [taskFiltro, setTaskFiltro] = useState({ gestor: "", estado: "" });
   const [rptFilter, setRptFilter] = useState({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" });
   const [newVal, setNewVal] = useState({ canal: "", grupo: "", gestor: "" });
 
@@ -607,6 +615,9 @@ function CRM() {
 
   useEffect(() => { if (currentUser) loadAll(); }, [currentUser, loadAll]);
 
+  function handleLogin(u) { sessionStorage.setItem("crm_session", JSON.stringify(u)); setCurrentUser(u); }
+  function handleLogout() { sessionStorage.removeItem("crm_session"); setCurrentUser(null); }
+
   async function saveConfig(key, arr) {
     const rows = await sbGet("config", `clave=eq.${key}&select=id`);
     if (rows.length) await sbPatch("config", rows[0].id, { valor: arr });
@@ -620,7 +631,7 @@ function CRM() {
       if (form.id) await sbPatch("clientes", form.id, body);
       else await sbPost("clientes", body);
       await loadAll(); setClientPanel(null);
-    } catch (e) { alert("Error al guardar: " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
     finally { setSaving(false); }
   }
   async function deleteClient(id) {
@@ -631,7 +642,7 @@ function CRM() {
   async function saveActivity(form) {
     setSaving(true);
     try {
-      const body = { cliente_id: form.clienteId, tipo: form.tipo, nota: form.nota, fecha: form.fecha, gestor: form.gestor };
+      const body = { cliente_id: form.clienteId, tipo: form.tipo, nota: form.nota, fecha: form.fecha, gestor: form.gestor, estado: form.estado || "Pendiente" };
       if (form.id) await sbPatch("actividades", form.id, body);
       else await sbPost("actividades", body);
       await loadAll(); setActPanel(null);
@@ -668,14 +679,28 @@ function CRM() {
     (!filter.gestor || c.gestor === filter.gestor)
   ), [clients, filter]);
 
-  if (!currentUser) return <Login onLogin={u => setCurrentUser(u)} />;
+  if (!currentUser) return <Login onLogin={handleLogin} />;
 
   // ── TABS ──────────────────────────────────────────────────────────────────
   function Dashboard() {
+    const actsFilt = activities.filter(a => (!dashGestor || a.gestor === dashGestor) && a.estado !== "Completada");
+    const tasksFilt = tasks.filter(t => (!dashGestor || t.gestor === dashGestor) && t.estado !== "Completada");
     return <div>
-      <NotifBanner tasks={tasks} clients={clients} />
+      <NotifBanner tasks={tasks} clients={clients} filterGestor={dashGestor} />
+      {/* Filtro gestor dashboard */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>Ver dashboard de:</div>
+        <div style={{ width: 200 }}>
+          <Sel value={dashGestor} onChange={setDashGestor} options={config.gestores} placeholder="Todos los gestores" />
+        </div>
+        {dashGestor && <Btn onClick={() => setDashGestor("")}>Ver todos</Btn>}
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
-        {[["Clientes", clients.length, "#185fa5"], ["Actividades", activities.length, "#1d9e75"], ["Tareas pendientes", tasks.filter(t => t.estado !== "Completada").length, "#ba7517"]].map(([l, v, c]) => (
+        {[
+          ["Clientes", dashGestor ? clients.filter(c => c.gestor === dashGestor).length : clients.length, "#185fa5"],
+          ["Actividades pendientes", actsFilt.length, "#1d9e75"],
+          ["Tareas pendientes", tasksFilt.length, "#ba7517"]
+        ].map(([l, v, c]) => (
           <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 10, padding: "1rem", textAlign: "center" }}>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{l}</div>
             <div style={{ fontSize: 28, fontWeight: 600, color: c }}>{v}</div>
@@ -684,18 +709,21 @@ function CRM() {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Últimas actividades</div>
-          {activities.slice(0, 5).map(a => (
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Actividades pendientes{dashGestor ? ` — ${dashGestor}` : ""}</div>
+          {actsFilt.slice(0, 5).map(a => (
             <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
               <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-              <div><div style={{ fontSize: 13 }}>{clientName(a.cliente_id)}</div><div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · {a.gestor}</div></div>
+              <div>
+                <div style={{ fontSize: 13 }}>{clientName(a.cliente_id)}</div>
+                <div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · <strong>{a.gestor}</strong></div>
+              </div>
             </div>
           ))}
-          {activities.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin actividades aún.</div>}
+          {actsFilt.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin actividades pendientes.</div>}
         </Card>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Próximas tareas</div>
-          {tasks.filter(t => t.estado !== "Completada").slice(0, 5).map(t => {
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Tareas pendientes{dashGestor ? ` — ${dashGestor}` : ""}</div>
+          {tasksFilt.slice(0, 5).map(t => {
             const d = diffDays(t.fecha);
             const alerta = d < 0 ? "#e24b4a" : d === 0 ? "#ba7517" : d <= 3 ? "#d97706" : null;
             return (
@@ -703,26 +731,30 @@ function CRM() {
                 <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13 }}>{t.titulo}</div>
-                  <div style={{ fontSize: 11, color: alerta || "#888" }}>{clientName(t.cliente_id)} · {t.fecha}{alerta ? (d < 0 ? " ⚠️ Vencida" : d === 0 ? " ⚠️ Hoy" : " ⏰ Próxima") : ""}</div>
+                  <div style={{ fontSize: 11, color: alerta || "#888" }}>{clientName(t.cliente_id)} · {t.fecha} · <strong>{t.gestor}</strong>{alerta ? (d < 0 ? " ⚠️" : " ⏰") : ""}</div>
                 </div>
               </div>
             );
           })}
-          {tasks.filter(t => t.estado !== "Completada").length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin tareas pendientes.</div>}
+          {tasksFilt.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin tareas pendientes.</div>}
         </Card>
       </div>
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Exportar datos</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn variant="success" onClick={() => downloadCSV(toCSV(clients, [
-            { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" }, { key: "telefono", label: "Teléfono" }, { key: "email", label: "Email" }, { key: "contacto", label: "Contacto" }, { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" }
-          ]), "clientes.csv")}>⬇ Clientes CSV</Btn>
+            { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" },
+            { key: "telefono", label: "Teléfono" }, { key: "email", label: "Email" }, { key: "contacto", label: "Contacto" },
+            { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" }
+          ]), "clientes.csv")}>⬇ Clientes</Btn>
           <Btn variant="success" onClick={() => downloadCSV(toCSV(activities.map(a => ({ ...a, cliente: clientName(a.cliente_id) })), [
-            { key: "cliente", label: "Cliente" }, { key: "tipo", label: "Tipo" }, { key: "nota", label: "Nota" }, { key: "fecha", label: "Fecha" }, { key: "gestor", label: "Gestor" }
-          ]), "actividades.csv")}>⬇ Actividades CSV</Btn>
+            { key: "cliente", label: "Cliente" }, { key: "tipo", label: "Tipo" }, { key: "estado", label: "Estado" },
+            { key: "nota", label: "Nota" }, { key: "fecha", label: "Fecha" }, { key: "gestor", label: "Gestor" }
+          ]), "actividades.csv")}>⬇ Actividades</Btn>
           <Btn variant="success" onClick={() => downloadCSV(toCSV(tasks.map(t => ({ ...t, cliente: clientName(t.cliente_id) })), [
-            { key: "cliente", label: "Cliente" }, { key: "titulo", label: "Tarea" }, { key: "fecha", label: "Fecha" }, { key: "prioridad", label: "Prioridad" }, { key: "estado", label: "Estado" }, { key: "gestor", label: "Gestor" }
-          ]), "tareas.csv")}>⬇ Tareas CSV</Btn>
+            { key: "cliente", label: "Cliente" }, { key: "titulo", label: "Tarea" }, { key: "fecha", label: "Fecha" },
+            { key: "prioridad", label: "Prioridad" }, { key: "estado", label: "Estado" }, { key: "gestor", label: "Gestor" }
+          ]), "tareas.csv")}>⬇ Tareas</Btn>
           <Btn onClick={loadAll} style={{ marginLeft: "auto" }}>↻ Actualizar</Btn>
         </div>
       </Card>
@@ -749,7 +781,7 @@ function CRM() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
             <thead style={{ background: "#f9f9f9" }}>
-              <tr>{["Empresa", "NIF", "Ciudad", "Contacto", "Canal", "Gestor", ""].map(h => (
+              <tr>{["Empresa", "NIF", "Ciudad", "Teléfono", "Email", "Gestor", ""].map(h => (
                 <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee" }}>{h}</th>
               ))}</tr>
             </thead>
@@ -758,8 +790,12 @@ function CRM() {
                 <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setShowImport(false); setDetalleId(c.id); }}>{c.nombre}</td>
                 <td style={{ padding: "9px 10px", color: "#888", fontSize: 12 }}>{c.nif}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12, color: "#666" }}>{c.ciudad}</td>
-                <td style={{ padding: "9px 10px", fontSize: 12 }}>{c.contacto}</td>
-                <td style={{ padding: "9px 10px" }}><Badge color="#7f77dd" label={c.canal || "—"} /></td>
+                <td style={{ padding: "9px 10px", fontSize: 12 }}>
+                  {c.telefono ? <a href={`tel:${c.telefono}`} style={{ color: "#185fa5", textDecoration: "none", fontWeight: 500 }}>📞 {c.telefono}</a> : "—"}
+                </td>
+                <td style={{ padding: "9px 10px", fontSize: 12 }}>
+                  {c.email ? <a href={`mailto:${c.email}`} style={{ color: "#185fa5", textDecoration: "none", fontWeight: 500 }}>✉️ {c.email}</a> : "—"}
+                </td>
                 <td style={{ padding: "9px 10px", fontSize: 12 }}>{c.gestor}</td>
                 <td style={{ padding: "9px 10px" }}>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -770,53 +806,68 @@ function CRM() {
               </tr>
             ))}</tbody>
           </table>
-          {filteredClients.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin clientes con esos filtros.</div>}
+          {filteredClients.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin clientes.</div>}
         </div>
       </>}
     </div>;
   }
 
   function TabActividades() {
+    const actsFilt = activities.filter(a =>
+      (!actFiltro.gestor || a.gestor === actFiltro.gestor) &&
+      (!actFiltro.estado || a.estado === actFiltro.estado)
+    );
     return <div>
       {actPanel !== null && <ActividadForm initial={actPanel === "new" ? {} : { ...actPanel, clienteId: actPanel.cliente_id }} config={config} clients={clients} onSave={saveActivity} onCancel={() => setActPanel(null)} saving={saving} currentUser={currentUser} />}
-      <div style={{ display: "flex", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <Sel value={actFiltro.gestor} onChange={v => setActFiltro(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Todos los gestores" />
+        <Sel value={actFiltro.estado} onChange={v => setActFiltro(f => ({ ...f, estado: v }))} options={ESTADOS_ACT} placeholder="Todos los estados" />
+        {(actFiltro.gestor || actFiltro.estado) && <Btn onClick={() => setActFiltro({ gestor: "", estado: "" })}>Limpiar</Btn>}
         <Btn variant="primary" onClick={() => setActPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva actividad</Btn>
       </div>
-      {activities.map(a => (
-        <div key={a.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 0", borderBottom: "1px solid #f0f0f0" }}>
+      {actsFilt.map(a => (
+        <div key={a.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 10px", marginBottom: 4, borderRadius: 8, border: "1px solid #f0f0f0", background: "#fff" }}>
           <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+          <Badge color={estadoColor[a.estado || "Pendiente"]} label={a.estado || "Pendiente"} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{clientName(a.cliente_id)}</div>
             <div style={{ fontSize: 13, color: "#555", marginTop: 2 }}>{a.nota}</div>
-            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{a.fecha} · {a.gestor}</div>
+            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{a.fecha} · <strong>{a.gestor}</strong></div>
           </div>
           <Btn onClick={() => setActPanel(a)}>Editar</Btn>
           <Btn onClick={() => deleteActivity(a.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
         </div>
       ))}
-      {activities.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin actividades aún.</div>}
+      {actsFilt.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin actividades.</div>}
     </div>;
   }
 
   function TabTareas() {
+    const tasksFilt = tasks.filter(t =>
+      (!taskFiltro.gestor || t.gestor === taskFiltro.gestor) &&
+      (!taskFiltro.estado || t.estado === taskFiltro.estado)
+    );
     return <div>
       {taskPanel !== null && <TareaForm initial={taskPanel === "new" ? {} : { ...taskPanel, clienteId: taskPanel.cliente_id }} config={config} clients={clients} onSave={saveTask} onCancel={() => setTaskPanel(null)} saving={saving} currentUser={currentUser} />}
-      <div style={{ display: "flex", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <Sel value={taskFiltro.gestor} onChange={v => setTaskFiltro(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Todos los gestores" />
+        <Sel value={taskFiltro.estado} onChange={v => setTaskFiltro(f => ({ ...f, estado: v }))} options={ESTADOS_TAREA} placeholder="Todos los estados" />
+        {(taskFiltro.gestor || taskFiltro.estado) && <Btn onClick={() => setTaskFiltro({ gestor: "", estado: "" })}>Limpiar</Btn>}
         <Btn variant="primary" onClick={() => setTaskPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva tarea</Btn>
       </div>
-      {tasks.map(t => {
+      {tasksFilt.map(t => {
         const d = diffDays(t.fecha);
         const alerta = t.estado !== "Completada" && (d < 0 ? "#fef2f2" : d === 0 ? "#fff7ed" : d <= 3 ? "#fffbeb" : null);
         return (
-          <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 10px", marginBottom: 4, borderRadius: 8, background: alerta || "transparent", border: alerta ? `1px solid ${d < 0 ? "#fca5a5" : d === 0 ? "#fed7aa" : "#fde68a"}` : "1px solid transparent", borderBottom: alerta ? undefined : "1px solid #f0f0f0" }}>
+          <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 10px", marginBottom: 4, borderRadius: 8, background: alerta || "#fff", border: `1px solid ${alerta ? (d < 0 ? "#fca5a5" : d === 0 ? "#fed7aa" : "#fde68a") : "#f0f0f0"}` }}>
             <input type="checkbox" checked={t.estado === "Completada"} onChange={() => toggleTask(t)} style={{ cursor: "pointer", width: 16, height: 16 }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 500, textDecoration: t.estado === "Completada" ? "line-through" : "none", color: t.estado === "Completada" ? "#aaa" : "#1a1a1a" }}>{t.titulo}</div>
               <div style={{ fontSize: 11, color: t.estado !== "Completada" && d < 0 ? "#e24b4a" : "#aaa", marginTop: 2 }}>
-                {clientName(t.cliente_id)} · {t.fecha} · {t.gestor}
+                {clientName(t.cliente_id)} · {t.fecha} · <strong>{t.gestor}</strong>
                 {t.estado !== "Completada" && d < 0 && " ⚠️ Vencida"}
-                {t.estado !== "Completada" && d === 0 && " ⚠️ Vence hoy"}
-                {t.estado !== "Completada" && d > 0 && d <= 3 && ` ⏰ Vence en ${d} día${d !== 1 ? "s" : ""}`}
+                {t.estado !== "Completada" && d === 0 && " ⚠️ Hoy"}
+                {t.estado !== "Completada" && d > 0 && d <= 3 && ` ⏰ ${d}d`}
               </div>
             </div>
             <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
@@ -826,7 +877,7 @@ function CRM() {
           </div>
         );
       })}
-      {tasks.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin tareas aún.</div>}
+      {tasksFilt.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin tareas.</div>}
     </div>;
   }
 
@@ -839,8 +890,7 @@ function CRM() {
     const rows = fc.map(c => {
       const cActs = activities.filter(a => a.cliente_id === c.id && (!rptFilter.fechaDesde || a.fecha >= rptFilter.fechaDesde) && (!rptFilter.fechaHasta || a.fecha <= rptFilter.fechaHasta));
       const cTasks = tasks.filter(t => t.cliente_id === c.id && (!rptFilter.estado || t.estado === rptFilter.estado));
-      const ultima = cActs.length ? cActs[0].fecha : "—";
-      return { ...c, numActs: cActs.length, numTasks: cTasks.length, ultima, tasksPend: tasks.filter(t => t.cliente_id === c.id && t.estado !== "Completada").length };
+      return { ...c, numActs: cActs.length, numTasks: cTasks.length, ultima: cActs.length ? cActs[0].fecha : "—", tasksPend: tasks.filter(t => t.cliente_id === c.id && t.estado !== "Completada").length };
     });
     return <div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "flex-end" }}>
@@ -861,7 +911,7 @@ function CRM() {
           { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" },
           { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" },
           { key: "numActs", label: "Actividades" }, { key: "numTasks", label: "Tareas" }, { key: "tasksPend", label: "Pendientes" }, { key: "ultima", label: "Última actividad" }
-        ]), "informe.csv")}>⬇ Exportar CSV</Btn>
+        ]), "informe.csv")}>⬇ CSV</Btn>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
         {[["Clientes", rows.length, "#185fa5"], ["Actividades", rows.reduce((s, r) => s + r.numActs, 0), "#1d9e75"], ["Tareas", rows.reduce((s, r) => s + r.numTasks, 0), "#7f77dd"], ["Pendientes", rows.reduce((s, r) => s + r.tasksPend, 0), "#ba7517"]].map(([l, v, c]) => (
@@ -900,12 +950,12 @@ function CRM() {
   function TabConfiguracion() {
     const sections = [["Canales", "canal", "canales", "#7f77dd"], ["Grupos gestores", "grupo", "grupos", "#1d9e75"], ["Gestores", "gestor", "gestores", "#378add"]];
     return <div>
-      {currentUser.admin && <><AdminPanel currentUser={currentUser} /><Sep label="Listas de configuración" /></>}
+      {currentUser.admin && <><AdminPanel /><Sep label="Listas de configuración" /></>}
       {sections.map(([label, ckey, k, color]) => (
         <div key={ckey} style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{label}</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <Inp value={newVal[ckey]} onChange={v => setNewVal(n => ({ ...n, [ckey]: v }))} placeholder={`Nuevo...`} />
+            <Inp value={newVal[ckey]} onChange={v => setNewVal(n => ({ ...n, [ckey]: v }))} placeholder="Nuevo..." />
             <Btn variant="primary" onClick={async () => {
               const v = newVal[ckey].trim();
               if (!v || config[k].includes(v)) return;
@@ -929,30 +979,27 @@ function CRM() {
 
   return (
     <div>
-      {/* HEADER */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", padding: "1rem 1.25rem", borderRadius: 12, background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 64, height: 64, borderRadius: "50%", overflow: "hidden", border: "2px solid rgba(255,255,255,0.6)", flexShrink: 0 }}>
-            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo"
-              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
           </div>
           <div>
             <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}>CRM Panificadora La Sin Gluten</div>
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>Gestión de clientes B2B</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", background: "rgba(255,255,255,0.15)", padding: "4px 12px", borderRadius: 20 }}>
-            👤 {currentUser.nombre} {currentUser.admin && "⭐"}
+            👤 {currentUser.nombre}{currentUser.admin ? " ⭐" : ""}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.2)", padding: "5px 12px", borderRadius: 20 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? "#ffd700" : error ? "#ff6b6b" : "#90ee90" }} />
             <span style={{ fontSize: 12, color: "#fff" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado"}</span>
           </div>
-          <Btn onClick={() => setCurrentUser(null)} style={{ fontSize: 12, padding: "5px 12px", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }}>Salir</Btn>
+          <Btn onClick={handleLogout} style={{ fontSize: 12, padding: "5px 12px", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }}>Salir</Btn>
         </div>
       </div>
-      {/* TABS */}
       <div style={{ display: "flex", gap: 2, marginBottom: 24, borderBottom: "1px solid #e8e8e8", overflowX: "auto" }}>
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
