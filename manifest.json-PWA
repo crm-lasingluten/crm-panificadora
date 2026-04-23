@@ -1,0 +1,21 @@
+{
+  "name": "CRM Panificadora La Sin Gluten",
+  "short_name": "CRM LSG",
+  "description": "Gestión de clientes B2B",
+  "start_url": "/crm-panificadora/",
+  "display": "standalone",
+  "background_color": "#5bb5bc",
+  "theme_color": "#5bb5bc",
+  "icons": [
+    {
+      "src": "Logo_02.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "Logo_02.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
