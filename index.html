@@ -787,7 +787,7 @@ function CRM() {
             </thead>
             <tbody>{filteredClients.map(c => (
               <tr key={c.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setShowImport(false); setDetalleId(c.id); }}>{c.nombre}</td>
+                <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setShowImport(false); setDetalleId(detalleId === c.id ? null : c.id); }}>{c.nombre} <span style={{ fontSize: 10, color: "#aaa" }}>▶</span></td>
                 <td style={{ padding: "9px 10px", color: "#888", fontSize: 12 }}>{c.nif}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12, color: "#666" }}>{c.ciudad}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12 }}>
