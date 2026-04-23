@@ -791,7 +791,13 @@ function CRM() {
                 <td style={{ padding: "9px 10px", color: "#888", fontSize: 12 }}>{c.nif}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12, color: "#666" }}>{c.ciudad}</td>
                 <td style={{ padding: "9px 10px", fontSize: 12 }}>
-                  {c.telefono ? <a href={`tel:${c.telefono}`} style={{ color: "#185fa5", textDecoration: "none", fontWeight: 500 }}>📞 {c.telefono}</a> : "—"}
+                  {c.telefono ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ color: "#555" }}>{c.telefono}</span>
+                      <a href={`tel:${c.telefono}`} title="Llamar" style={{ textDecoration: "none", fontSize: 16 }}>📞</a>
+                      <a href={`https://wa.me/${c.telefono.replace(/[\s+\-()]/g, "")}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ textDecoration: "none", fontSize: 16 }}>💬</a>
+                    </div>
+                  ) : "—"}
                 </td>
                 <td style={{ padding: "9px 10px", fontSize: 12 }}>
                   {c.email ? <a href={`mailto:${c.email}`} style={{ color: "#185fa5", textDecoration: "none", fontWeight: 500 }}>✉️ {c.email}</a> : "—"}
