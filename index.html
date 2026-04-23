@@ -3,12 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#5bb5bc" />
   <title>CRM Panificadora La Sin Gluten</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
@@ -26,6 +30,7 @@ const { useState, useEffect, useCallback, useMemo, useRef } = React;
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
 const H = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}`, "Prefer": "return=representation" };
+const EJS_SERVICE = "service_23nxndb", EJS_TEMPLATE = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
 
 async function sbGet(table, params = "") {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: H });
@@ -47,67 +52,21 @@ async function sbDelete(table, id) {
   if (!r.ok) throw new Error(await r.text());
 }
 
-// ── EmailJS ───────────────────────────────────────────────────────────────────
-const EJS_SERVICE  = "service_23nxndb";
-const EJS_TEMPLATE = "template_j38orxq";
-const EJS_KEY      = "58oEGgupwIjO040e6";
-
-async function sendNotifEmail(gestor, email, momento, resumen) {
-  try {
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      gestor, email, momento,
-      fecha: new Date().toLocaleDateString("es-ES"),
-      resumen
-    }, EJS_KEY);
-    return true;
-  } catch (e) { console.error("EmailJS error:", e); return false; }
-}
-
-function buildResumen(gestor, tasks, activities, clientName) {
-  const hoy = today();
-  const tareasPend = tasks.filter(t => t.gestor === gestor && t.estado !== "Completada");
-  const tareasVenc = tareasPend.filter(t => diffDays(t.fecha) < 0);
-  const tareasHoy  = tareasPend.filter(t => diffDays(t.fecha) === 0);
-  const tareasProx = tareasPend.filter(t => diffDays(t.fecha) > 0 && diffDays(t.fecha) <= 3);
-  const actsPend   = activities.filter(a => a.gestor === gestor && a.estado !== "Completada");
-
-  let txt = "";
-  if (tareasVenc.length) {
-    txt += `🔴 TAREAS VENCIDAS (${tareasVenc.length}):\n`;
-    tareasVenc.forEach(t => txt += `  • ${t.titulo} — ${clientName(t.cliente_id)} — Venció: ${t.fecha}\n`);
-    txt += "\n";
-  }
-  if (tareasHoy.length) {
-    txt += `🟠 VENCEN HOY (${tareasHoy.length}):\n`;
-    tareasHoy.forEach(t => txt += `  • ${t.titulo} — ${clientName(t.cliente_id)}\n`);
-    txt += "\n";
-  }
-  if (tareasProx.length) {
-    txt += `🟡 PRÓXIMAS (${tareasProx.length}):\n`;
-    tareasProx.forEach(t => txt += `  • ${t.titulo} — ${clientName(t.cliente_id)} — Vence: ${t.fecha}\n`);
-    txt += "\n";
-  }
-  if (actsPend.length) {
-    txt += `📋 ACTIVIDADES PENDIENTES (${actsPend.length}):\n`;
-    actsPend.slice(0, 5).forEach(a => txt += `  • ${clientName(a.cliente_id)} — ${a.tipo}: ${a.nota?.slice(0, 60)}${a.nota?.length > 60 ? "…" : ""}\n`);
-    txt += "\n";
-  }
-  if (!txt) txt = "✅ ¡Todo al día! No tienes tareas ni actividades pendientes.\n";
-  return txt;
-}
-
-const TIPOS = ["Llamada", "Email", "Reunión", "Nota"];
+const TIPOS = ["Llamada", "Email", "Reunión", "Visita", "WhatsApp", "Nota"];
 const PRIORIDADES = ["Alta", "Media", "Baja"];
-const ESTADOS_TAREA = ["Pendiente", "En curso", "Completada"];
 const ESTADOS_ACT = ["Pendiente", "En curso", "Completada"];
-const TABS = ["Dashboard", "Clientes", "Actividades", "Tareas", "Informes", "Configuración"];
-const prioColor   = { Alta: "#e24b4a", Media: "#ba7517", Baja: "#1d9e75" };
+const TIPOS_CLIENTE = ["Potencial", "Cliente"];
+const TABS = ["Dashboard", "Clientes", "Actividades", "Ventas", "Informes", "Configuración"];
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+const prioColor  = { Alta: "#e24b4a", Media: "#ba7517", Baja: "#1d9e75" };
 const estadoColor = { Pendiente: "#378add", "En curso": "#ba7517", Completada: "#1d9e75" };
-const tipoColor   = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Nota: "#888780" };
-const normalize   = s => s?.trim().toLowerCase().replace(/\s+/g, " ");
-const emptyClient = { nombre: "", nif: "", calle: "", numero: "", cp: "", ciudad: "", pais: "España", telefono: "", email: "", contacto: "", canal: "", grupo: "", gestor: "" };
+const tipoColor  = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Visita: "#e24b4a", WhatsApp: "#25d366", Nota: "#888780" };
+const normalize  = s => s?.trim().toLowerCase().replace(/\s+/g, " ");
 const today = () => new Date().toISOString().slice(0, 10);
 const diffDays = f => Math.ceil((new Date(f) - new Date(today())) / 86400000);
+const currYear = new Date().getFullYear();
+const currMonth = new Date().getMonth() + 1;
 
 function toCSV(rows, cols) {
   const h = cols.map(c => c.label).join(",");
@@ -119,6 +78,28 @@ function downloadCSV(content, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── EmailJS ───────────────────────────────────────────────────────────────────
+async function sendNotifEmail(gestor, email, momento, resumen) {
+  try {
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, { gestor, email, momento, fecha: new Date().toLocaleDateString("es-ES"), resumen }, EJS_KEY);
+    return true;
+  } catch (e) { console.error(e); return false; }
+}
+function buildResumen(gestor, tasks, activities, clientName) {
+  const tareasPend = tasks.filter(t => t.gestor === gestor && t.estado !== "Completada");
+  const tareasVenc = tareasPend.filter(t => diffDays(t.fecha) < 0);
+  const tareasHoy  = tareasPend.filter(t => diffDays(t.fecha) === 0);
+  const tareasProx = tareasPend.filter(t => diffDays(t.fecha) > 0 && diffDays(t.fecha) <= 3);
+  const actsPend   = activities.filter(a => a.gestor === gestor && a.estado !== "Completada");
+  let txt = "";
+  if (tareasVenc.length) { txt += `🔴 VENCIDAS (${tareasVenc.length}):\n`; tareasVenc.forEach(t => txt += `  • ${t.titulo} — ${clientName(t.cliente_id)} — ${t.fecha}\n`); txt += "\n"; }
+  if (tareasHoy.length)  { txt += `🟠 HOY (${tareasHoy.length}):\n`;        tareasHoy.forEach(t  => txt += `  • ${t.titulo} — ${clientName(t.cliente_id)}\n`);              txt += "\n"; }
+  if (tareasProx.length) { txt += `🟡 PRÓXIMAS (${tareasProx.length}):\n`;  tareasProx.forEach(t => txt += `  • ${t.titulo} — ${clientName(t.cliente_id)} — ${t.fecha}\n`); txt += "\n"; }
+  if (actsPend.length)   { txt += `📋 ACTIVIDADES PENDIENTES (${actsPend.length}):\n`; actsPend.slice(0,5).forEach(a => txt += `  • ${clientName(a.cliente_id)} — ${a.tipo}: ${a.nota?.slice(0,60)}…\n`); txt += "\n"; }
+  if (!txt) txt = "✅ ¡Todo al día! No tienes pendientes.\n";
+  return txt;
 }
 
 // ── UI ────────────────────────────────────────────────────────────────────────
@@ -141,7 +122,7 @@ function Sel({ value, onChange, options, placeholder }) {
   </select>;
 }
 function Btn({ onClick, children, variant = "default", style, disabled }) {
-  const bg = { primary: "#185fa5", success: "#0f6e56", danger: "#a32d2d", warning: "#ba7517", default: "#fff" };
+  const bg  = { primary: "#185fa5", success: "#0f6e56", danger: "#a32d2d", warning: "#ba7517", default: "#fff" };
   const col = { primary: "#fff", success: "#fff", danger: "#fff", warning: "#fff", default: "#333" };
   return <button onClick={onClick} disabled={disabled}
     style={{ cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, borderRadius: 8, fontSize: 13, padding: "7px 14px", fontWeight: 500, border: "1px solid #ddd", background: bg[variant] || bg.default, color: col[variant] || col.default, ...style }}>
@@ -181,14 +162,10 @@ function Login({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [usuarios, setUsuarios] = useState([]);
-
-  useEffect(() => {
-    sbGet("usuarios", "select=nombre&order=nombre.asc").then(rows => setUsuarios(rows.map(r => r.nombre))).catch(() => {});
-  }, []);
-
+  useEffect(() => { sbGet("usuarios", "select=nombre&order=nombre.asc").then(r => setUsuarios(r.map(x => x.nombre))).catch(() => {}); }, []);
   async function handleLogin() {
     if (!gestor) { setError("Selecciona tu nombre"); return; }
-    if (!pass) { setError("Ingresa tu contraseña"); return; }
+    if (!pass)   { setError("Ingresa tu contraseña"); return; }
     setLoading(true);
     try {
       const rows = await sbGet("usuarios", `nombre=eq.${encodeURIComponent(gestor)}&select=nombre,password,admin`);
@@ -196,10 +173,9 @@ function Login({ onLogin }) {
       const u = { nombre: rows[0].nombre, admin: rows[0].admin };
       sessionStorage.setItem("crm_session", JSON.stringify(u));
       onLogin(u);
-    } catch (e) { setError("Error de conexión"); }
+    } catch { setError("Error de conexión"); }
     finally { setLoading(false); }
   }
-
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
       <div style={{ background: "#fff", borderRadius: 16, padding: "2.5rem 2rem", width: "100%", maxWidth: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", animation: "slideIn 0.3s ease" }}>
@@ -231,73 +207,147 @@ function Login({ onLogin }) {
 function AdminPanel() {
   const [usuarios, setUsuarios] = useState([]);
   const [newPasses, setNewPasses] = useState({});
+  const [emails, setEmails] = useState({});
   const [saved, setSaved] = useState({});
-
-  useEffect(() => {
-    sbGet("usuarios", "select=id,nombre,admin&order=nombre.asc").then(setUsuarios).catch(() => {});
-  }, []);
-
-  async function savePass(u) {
+  useEffect(() => { sbGet("usuarios", "select=id,nombre,admin,email&order=nombre.asc").then(rows => { setUsuarios(rows); const em = {}; rows.forEach(r => { em[r.id] = r.email || ""; }); setEmails(em); }).catch(() => {}); }, []);
+  async function saveUser(u) {
     const np = newPasses[u.id]?.trim();
-    if (!np || np.length < 4) { alert("La contraseña debe tener al menos 4 caracteres"); return; }
+    const em = emails[u.id]?.trim();
+    const body = {};
+    if (np) { if (np.length < 4) { alert("Mínimo 4 caracteres"); return; } body.password = np; }
+    if (em !== undefined) body.email = em;
+    if (!Object.keys(body).length) return;
     try {
-      await sbPatch("usuarios", u.id, { password: np });
+      await sbPatch("usuarios", u.id, body);
       setNewPasses(p => ({ ...p, [u.id]: "" }));
       setSaved(s => ({ ...s, [u.id]: true }));
       setTimeout(() => setSaved(s => ({ ...s, [u.id]: false })), 2000);
     } catch (e) { alert("Error: " + e.message); }
   }
-
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, color: "#555" }}>🔐 Gestión de contraseñas</div>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>🔐 Gestión de usuarios</div>
       {usuarios.map(u => (
-        <div key={u.id} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #eee" }}>
-          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{u.nombre} {u.admin && <Badge color="#185fa5" label="Admin" />}</div>
-          <input type="password" value={newPasses[u.id] || ""} onChange={e => setNewPasses(p => ({ ...p, [u.id]: e.target.value }))}
-            placeholder="Nueva contraseña" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: 180 }} />
-          <Btn variant="primary" onClick={() => savePass(u)}>{saved[u.id] ? "✓ Guardado" : "Cambiar"}</Btn>
+        <div key={u.id} style={{ marginBottom: 10, padding: "10px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #eee" }}>
+          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>{u.nombre} {u.admin && <Badge color="#185fa5" label="Admin" />}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input type="email" value={emails[u.id] || ""} onChange={e => setEmails(p => ({ ...p, [u.id]: e.target.value }))}
+              placeholder="Email para notificaciones" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 12, flex: 2, minWidth: 180 }} />
+            <input type="password" value={newPasses[u.id] || ""} onChange={e => setNewPasses(p => ({ ...p, [u.id]: e.target.value }))}
+              placeholder="Nueva contraseña" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 12, flex: 1, minWidth: 140 }} />
+            <Btn variant="primary" onClick={() => saveUser(u)}>{saved[u.id] ? "✓" : "Guardar"}</Btn>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-// ── NOTIFICACIONES ────────────────────────────────────────────────────────────
-function NotifBanner({ tasks, clients, filterGestor }) {
-  const alertas = useMemo(() => {
-    return tasks
-      .filter(t => t.estado !== "Completada" && (!filterGestor || t.gestor === filterGestor))
-      .map(t => {
-        const d = diffDays(t.fecha);
-        if (d < 0) return { ...t, tipo: "vencida", label: `Vencida hace ${Math.abs(d)} día${Math.abs(d) !== 1 ? "s" : ""}` };
-        if (d === 0) return { ...t, tipo: "hoy", label: "Vence hoy" };
-        if (d <= 3) return { ...t, tipo: "proxima", label: `Vence en ${d} día${d !== 1 ? "s" : ""}` };
-        return null;
-      }).filter(Boolean).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  }, [tasks, filterGestor]);
-
+// ── NOTIF CONFIG ──────────────────────────────────────────────────────────────
+function NotifConfig({ tasks, activities, clients, currentUser }) {
   const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
+  const [cfg, setCfg] = useState(() => { try { return JSON.parse(localStorage.getItem("crm_notif") || '{"horaM":"08:00","horaT":"18:00","activo":true}'); } catch { return { horaM: "08:00", horaT: "18:00", activo: true }; } });
+  const [sending, setSending] = useState(false);
+  const [lastSent, setLastSent] = useState(() => { try { return JSON.parse(localStorage.getItem("crm_notif_last") || "{}"); } catch { return {}; } });
+  const save = c => { setCfg(c); localStorage.setItem("crm_notif", JSON.stringify(c)); };
+
+  async function sendAll(momento) {
+    setSending(true);
+    const usuarios = await sbGet("usuarios", "select=nombre,email");
+    let ok = 0;
+    for (const u of usuarios) {
+      if (!u.email) continue;
+      const res = buildResumen(u.nombre, tasks, activities, clientName);
+      if (await sendNotifEmail(u.nombre, u.email, momento, res)) ok++;
+    }
+    const now = new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+    const updated = { ...lastSent, [momento]: now };
+    setLastSent(updated); localStorage.setItem("crm_notif_last", JSON.stringify(updated));
+    setSending(false); alert(`✅ Enviado a ${ok} gestor${ok !== 1 ? "es" : ""}`);
+  }
+  async function sendTest() {
+    setSending(true);
+    const rows = await sbGet("usuarios", `nombre=eq.${encodeURIComponent(currentUser.nombre)}&select=nombre,email`);
+    const u = rows[0];
+    if (!u?.email) { alert("No tienes email configurado. Ve a Configuración → Gestión de usuarios."); setSending(false); return; }
+    const res = buildResumen(u.nombre, tasks, activities, clientName);
+    const ok = await sendNotifEmail(u.nombre, u.email, "prueba", res);
+    setSending(false); alert(ok ? `✅ Email enviado a ${u.email}` : "❌ Error. Revisa EmailJS.");
+  }
+  useEffect(() => {
+    if (!cfg.activo) return;
+    const iv = setInterval(async () => {
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+      const ds = now.toDateString();
+      const stored = JSON.parse(localStorage.getItem("crm_notif_auto") || "{}");
+      if (hhmm === cfg.horaM && stored.m !== ds) { localStorage.setItem("crm_notif_auto", JSON.stringify({ ...stored, m: ds })); await sendAll("inicio del día"); }
+      if (hhmm === cfg.horaT && stored.t !== ds) { localStorage.setItem("crm_notif_auto", JSON.stringify({ ...stored, t: ds })); await sendAll("fin del día"); }
+    }, 30000);
+    return () => clearInterval(iv);
+  }, [cfg, tasks, activities]);
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>📧 Notificaciones por email</div>
+      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 10, padding: "1rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>Automáticas</span>
+          <label style={{ position: "relative", display: "inline-block", width: 44, height: 24, cursor: "pointer" }}>
+            <input type="checkbox" checked={cfg.activo} onChange={e => save({ ...cfg, activo: e.target.checked })} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", inset: 0, borderRadius: 24, background: cfg.activo ? "#185fa5" : "#ccc", transition: "0.3s" }}>
+              <span style={{ position: "absolute", top: 3, left: cfg.activo ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "0.3s" }} />
+            </span>
+          </label>
+          <span style={{ fontSize: 12, color: cfg.activo ? "#1d9e75" : "#aaa" }}>{cfg.activo ? "Activadas" : "Desactivadas"}</span>
+        </div>
+        <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
+          {[["🌅 Mañana", "horaM", "m"], ["🌆 Tarde", "horaT", "t"]].map(([l, k, sk]) => (
+            <div key={k} style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>{l}</div>
+              <input type="time" value={cfg[k]} onChange={e => save({ ...cfg, [k]: e.target.value })}
+                style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: "100%" }} />
+              {lastSent[sk === "m" ? "inicio del día" : "fin del día"] && <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>Último: {lastSent[sk === "m" ? "inicio del día" : "fin del día"]}</div>}
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>⚠️ El envío automático requiere que el CRM esté abierto en el navegador.</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn variant="primary" onClick={sendTest} disabled={sending}>📧 Prueba (solo a mí)</Btn>
+          <Btn variant="success" onClick={() => sendAll("inicio del día")} disabled={sending}>🌅 Enviar mañana</Btn>
+          <Btn variant="success" onClick={() => sendAll("fin del día")} disabled={sending}>🌆 Enviar tarde</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── NOTIF BANNER ──────────────────────────────────────────────────────────────
+function NotifBanner({ tasks, clients, filterGestor }) {
+  const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
+  const alertas = useMemo(() => tasks.filter(t => t.estado !== "Completada" && (!filterGestor || t.gestor === filterGestor)).map(t => {
+    const d = diffDays(t.fecha);
+    if (d < 0) return { ...t, tipo: "vencida", label: `Vencida hace ${Math.abs(d)}d` };
+    if (d === 0) return { ...t, tipo: "hoy", label: "Vence hoy" };
+    if (d <= 3)  return { ...t, tipo: "proxima", label: `Vence en ${d}d` };
+    return null;
+  }).filter(Boolean).sort((a,b) => a.fecha.localeCompare(b.fecha)), [tasks, filterGestor]);
   const [visible, setVisible] = useState(true);
   useEffect(() => setVisible(true), [filterGestor]);
   if (!alertas.length || !visible) return null;
-  const isVenc = alertas.some(a => a.tipo === "vencida");
-  const isHoy  = alertas.some(a => a.tipo === "hoy");
-  const bg     = isVenc ? "#fef2f2" : isHoy ? "#fff7ed" : "#fffbeb";
-  const border = isVenc ? "#fca5a5" : isHoy ? "#fed7aa" : "#fde68a";
-  const icon   = isVenc ? "🔴" : isHoy ? "🟠" : "🟡";
+  const isV = alertas.some(a => a.tipo === "vencida"), isH = alertas.some(a => a.tipo === "hoy");
   return (
-    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: 16, animation: "slideIn 0.3s ease" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div style={{ background: isV ? "#fef2f2" : isH ? "#fff7ed" : "#fffbeb", border: `1px solid ${isV ? "#fca5a5" : isH ? "#fed7aa" : "#fde68a"}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{icon} {alertas.length} tarea{alertas.length !== 1 ? "s" : ""} requieren atención</div>
-          {alertas.slice(0, 3).map(a => (
-            <div key={a.id} style={{ fontSize: 12, color: "#555", marginBottom: 3, display: "flex", gap: 8, alignItems: "center" }}>
-              <Badge color={isVenc ? "#e24b4a" : isHoy ? "#ba7517" : "#d97706"} label={a.label} />
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{isV ? "🔴" : isH ? "🟠" : "🟡"} {alertas.length} actividad{alertas.length !== 1 ? "es" : ""} requieren atención</div>
+          {alertas.slice(0,3).map(a => (
+            <div key={a.id} style={{ fontSize: 12, color: "#555", marginBottom: 3, display: "flex", gap: 8 }}>
+              <Badge color={isV ? "#e24b4a" : isH ? "#ba7517" : "#d97706"} label={a.label} />
               <span>{a.titulo} — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
             </div>
           ))}
-          {alertas.length > 3 && <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>...y {alertas.length - 3} más.</div>}
+          {alertas.length > 3 && <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>…y {alertas.length - 3} más</div>}
         </div>
         <button onClick={() => setVisible(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#888", fontSize: 18, marginLeft: 12 }}>×</button>
       </div>
@@ -307,7 +357,8 @@ function NotifBanner({ tasks, clients, filterGestor }) {
 
 // ── FORM: Cliente ─────────────────────────────────────────────────────────────
 function ClienteForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
-  const [form, setForm] = useState(() => ({ ...emptyClient, canal: config.canales[0] || "", grupo: config.grupos[0] || "", gestor: currentUser.nombre, ...initial }));
+  const emptyC = { nombre: "", nif: "", calle: "", numero: "", cp: "", ciudad: "", pais: "España", telefono: "", email: "", contacto: "", canal: "", grupo: "", gestor: currentUser.nombre, tipo_cliente: "Potencial" };
+  const [form, setForm] = useState(() => ({ ...emptyC, canal: config.canales[0] || "", grupo: config.grupos[0] || "", ...initial }));
   const [errors, setErrors] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   function validate() {
@@ -328,9 +379,11 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
         <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar cliente" : "Nuevo cliente"}</span>
         <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
       </div>
+      {form.codigo && <div style={{ fontSize: 12, color: "#185fa5", fontWeight: 600, marginBottom: 10 }}>Código: {form.codigo}</div>}
       <FRow>
         <FL label="Nombre de empresa *" flex={2} error={errors.nombre}><Inp value={form.nombre} onChange={v => set("nombre", v)} placeholder="Nombre empresa" error={errors.nombre} /></FL>
         <FL label="NIF *" flex={1} error={errors.nif}><Inp value={form.nif} onChange={v => set("nif", v)} placeholder="A12345678" error={errors.nif} /></FL>
+        <FL label="Tipo" flex={1}><Sel value={form.tipo_cliente || "Potencial"} onChange={v => set("tipo_cliente", v)} options={TIPOS_CLIENTE} /></FL>
       </FRow>
       <Sep label="Dirección" />
       <FRow>
@@ -344,7 +397,7 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
       </FRow>
       <Sep label="Contacto" />
       <FRow>
-        <FL label="Teléfono" flex={1}><Inp value={form.telefono} onChange={v => set("telefono", v)} placeholder="900 000 000" type="tel" /></FL>
+        <FL label="Teléfono" flex={1}><Inp value={form.telefono} onChange={v => set("telefono", v)} placeholder="+34612345678" type="tel" /></FL>
         <FL label="Email" flex={1} error={errors.email}><Inp value={form.email} onChange={v => set("email", v)} placeholder="email@empresa.com" error={errors.email} /></FL>
       </FRow>
       <FRow><FL label="Persona de contacto *" error={errors.contacto}><Inp value={form.contacto} onChange={v => set("contacto", v)} placeholder="Nombre y apellidos" error={errors.contacto} /></FL></FRow>
@@ -361,7 +414,7 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
 
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
 function ActividadForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
-  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: today(), gestor: currentUser.nombre, clienteId: "", estado: "Pendiente", ...initial }));
+  const [form, setForm] = useState(() => ({ tipo: "Llamada", nota: "", fecha: today(), gestor: currentUser.nombre, clienteId: "", estado: "Pendiente", prioridad: "Media", titulo: "", ...initial }));
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
   const handleGestorChange = v => {
@@ -388,7 +441,11 @@ function ActividadForm({ initial, config, clients, onSave, onCancel, saving, cur
         <FL label="Tipo" flex={1}><Sel value={form.tipo} onChange={v => set("tipo", v)} options={TIPOS} /></FL>
       </FRow>
       <FRow>
+        <FL label="Título" flex={2}><Inp value={form.titulo} onChange={v => set("titulo", v)} placeholder="Título de la actividad" /></FL>
         <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL>
+      </FRow>
+      <FRow>
+        <FL label="Prioridad" flex={1}><Sel value={form.prioridad} onChange={v => set("prioridad", v)} options={PRIORIDADES} /></FL>
         <FL label="Estado" flex={1}><Sel value={form.estado} onChange={v => set("estado", v)} options={ESTADOS_ACT} /></FL>
       </FRow>
       <FRow><FL label="Nota / Descripción" flex={1}><Textarea value={form.nota} onChange={v => set("nota", v)} placeholder="Describe la actividad…" /></FL></FRow>
@@ -397,58 +454,21 @@ function ActividadForm({ initial, config, clients, onSave, onCancel, saving, cur
   );
 }
 
-// ── FORM: Tarea ───────────────────────────────────────────────────────────────
-function TareaForm({ initial, config, clients, onSave, onCancel, saving, currentUser }) {
-  const [form, setForm] = useState(() => ({ titulo: "", fecha: today(), prioridad: "Media", estado: "Pendiente", gestor: currentUser.nombre, clienteId: "", ...initial }));
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const clientesDelGestor = useMemo(() => form.gestor ? clients.filter(c => c.gestor === form.gestor) : clients, [form.gestor, clients]);
-  const handleGestorChange = v => {
-    const filtered = v ? clients.filter(c => c.gestor === v) : clients;
-    set("gestor", v);
-    if (!filtered.some(c => c.id === +form.clienteId)) set("clienteId", filtered[0]?.id || "");
-  };
-  const canSave = form.clienteId && form.titulo.trim();
-  return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar tarea" : "Nueva tarea"}</span>
-        <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
-      </div>
-      <FRow>
-        <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={handleGestorChange} options={config.gestores} placeholder="Seleccionar" /></FL>
-        <FL label="Cliente" flex={2}>
-          <select value={String(form.clienteId)} onChange={e => set("clienteId", +e.target.value)}
-            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }}>
-            <option value="">— Seleccionar cliente —</option>
-            {clientesDelGestor.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
-        </FL>
-      </FRow>
-      <FRow><FL label="Título de la tarea" flex={1}><Inp value={form.titulo} onChange={v => set("titulo", v)} placeholder="Describe la tarea" /></FL></FRow>
-      <FRow>
-        <FL label="Fecha límite" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL>
-        <FL label="Prioridad" flex={1}><Sel value={form.prioridad} onChange={v => set("prioridad", v)} options={PRIORIDADES} /></FL>
-        <FL label="Estado" flex={1}><Sel value={form.estado} onChange={v => set("estado", v)} options={ESTADOS_TAREA} /></FL>
-      </FRow>
-      <Btn variant="primary" onClick={() => canSave && onSave({ ...form, clienteId: +form.clienteId })} disabled={!canSave || saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
-    </Card>
-  );
-}
-
 // ── DETALLE CLIENTE ───────────────────────────────────────────────────────────
-function DetalleCliente({ cliente, activities, tasks, onClose }) {
-  const cActs = activities.filter(a => a.cliente_id === cliente.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const cTasks = tasks.filter(t => t.cliente_id === cliente.id);
-  const dir = [cliente.calle, cliente.numero].filter(Boolean).join(" ") +
-    ([cliente.cp, cliente.ciudad].filter(Boolean).length ? ", " + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ") : "") +
-    (cliente.pais ? ", " + cliente.pais : "");
+function DetalleCliente({ cliente, activities, onClose }) {
+  const cActs = activities.filter(a => a.cliente_id === cliente.id).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const dir = [cliente.calle, cliente.numero].filter(Boolean).join(" ") + ([cliente.cp, cliente.ciudad].filter(Boolean).length ? ", " + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ") : "") + (cliente.pais ? ", " + cliente.pais : "");
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>{cliente.nombre}</span>
+        <div>
+          <span style={{ fontSize: 15, fontWeight: 600 }}>{cliente.nombre}</span>
+          {cliente.codigo && <span style={{ fontSize: 12, color: "#185fa5", fontWeight: 600, marginLeft: 10, background: "#185fa511", padding: "2px 8px", borderRadius: 8 }}>{cliente.codigo}</span>}
+        </div>
         <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {cliente.tipo_cliente && <Badge color={cliente.tipo_cliente === "Cliente" ? "#1d9e75" : "#ba7517"} label={cliente.tipo_cliente} />}
         {cliente.canal && <Badge color="#7f77dd" label={cliente.canal} />}
         {cliente.grupo && <Badge color="#1d9e75" label={cliente.grupo} />}
         {cliente.gestor && <Badge color="#378add" label={cliente.gestor} />}
@@ -456,7 +476,7 @@ function DetalleCliente({ cliente, activities, tasks, onClose }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px", fontSize: 13, marginBottom: 14 }}>
         <div><span style={{ fontSize: 11, color: "#888" }}>NIF: </span>{cliente.nif || "—"}</div>
         <div><span style={{ fontSize: 11, color: "#888" }}>Teléfono: </span>
-          {cliente.telefono ? <a href={`tel:${cliente.telefono}`} style={{ color: "#185fa5", textDecoration: "none" }}>{cliente.telefono}</a> : "—"}
+          {cliente.telefono ? <span>{cliente.telefono} <a href={`tel:${cliente.telefono}`} style={{ textDecoration: "none" }}>📞</a> <a href={`https://wa.me/${cliente.telefono.replace(/[\s+\-()]/g,"")}`} target="_blank" style={{ textDecoration: "none" }}>💬</a></span> : "—"}
         </div>
         <div><span style={{ fontSize: 11, color: "#888" }}>Email: </span>
           {cliente.email ? <a href={`mailto:${cliente.email}`} style={{ color: "#185fa5", textDecoration: "none" }}>{cliente.email}</a> : "—"}
@@ -464,181 +484,245 @@ function DetalleCliente({ cliente, activities, tasks, onClose }) {
         <div><span style={{ fontSize: 11, color: "#888" }}>Contacto: </span>{cliente.contacto || "—"}</div>
         <div style={{ gridColumn: "1/-1" }}><span style={{ fontSize: 11, color: "#888" }}>Dirección: </span>{dir || "—"}</div>
       </div>
-      <Sep label={`Actividades (${cActs.length})`} />
-      {cActs.length === 0 ? <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>Sin actividades.</div> :
-        cActs.map(a => <div key={a.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "flex-start" }}>
-          <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-          <Badge color={estadoColor[a.estado || "Pendiente"]} label={a.estado || "Pendiente"} />
-          <div><div style={{ fontSize: 13 }}>{a.nota}</div><div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · {a.gestor}</div></div>
-        </div>)}
-      <Sep label={`Tareas (${cTasks.length})`} />
-      {cTasks.length === 0 ? <div style={{ fontSize: 12, color: "#888" }}>Sin tareas.</div> :
-        cTasks.map(t => <div key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-          <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
-          <span style={{ fontSize: 13, flex: 1 }}>{t.titulo}</span>
-          <Badge color={estadoColor[t.estado]} label={t.estado} />
-        </div>)}
+      <Sep label={`Historial de actividades (${cActs.length})`} />
+      {cActs.length === 0 ? <div style={{ fontSize: 12, color: "#888" }}>Sin actividades registradas.</div> :
+        cActs.map(a => (
+          <div key={a.id} style={{ display: "flex", gap: 8, marginBottom: 10, padding: "8px 10px", background: "#f9f9f9", borderRadius: 8 }}>
+            <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+            <Badge color={estadoColor[a.estado || "Pendiente"]} label={a.estado || "Pendiente"} />
+            <div style={{ flex: 1 }}>
+              {a.titulo && <div style={{ fontSize: 13, fontWeight: 500 }}>{a.titulo}</div>}
+              <div style={{ fontSize: 13, color: "#555" }}>{a.nota}</div>
+              <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{a.fecha} · <strong>{a.gestor}</strong> · <Badge color={prioColor[a.prioridad || "Media"]} label={a.prioridad || "Media"} /></div>
+            </div>
+          </div>
+        ))}
     </Card>
   );
 }
 
-// ── IMPORTACIÓN EXCEL ─────────────────────────────────────────────────────────
+// ── IMPORTACIÓN EXCEL CLIENTES ────────────────────────────────────────────────
 function ImportExcel({ config, clients, onImport, onClose }) {
   const [preview, setPreview] = useState(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
   const fileRef = useRef();
-
   function handleFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = evt => {
       try {
         const wb = XLSX.read(evt.target.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        // Usar sheet_to_json con defval "" para manejar celdas vacías
         const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
         const mapped = rows.map(r => {
-          // Buscar columnas por nombre (case insensitive) o por posición
           const keys = Object.keys(r);
-          const get = (idx, names) => {
-            for (const n of names) {
-              const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase()));
-              if (k !== undefined) return String(r[k] || "").trim();
-            }
-            return String(r[keys[idx]] || "").trim();
-          };
-          return {
-            nombre:   get(0, ["nombre","empresa","company"]),
-            nif:      get(1, ["nif","cif","vat"]),
-            calle:    get(2, ["calle","street","direccion"]),
-            numero:   get(3, ["numero","número","num"]),
-            cp:       get(4, ["cp","postal","código postal"]),
-            ciudad:   get(5, ["ciudad","city","poblacion"]),
-            pais:     get(6, ["pais","país","country"]) || "España",
-            telefono: get(7, ["telefono","teléfono","phone","tel"]),
-            email:    get(8, ["email","mail","correo"]),
-            contacto: get(9, ["contacto","contact","persona"]),
-            canal:    get(10, ["canal","channel"]),
-            grupo:    get(11, ["grupo","group"]),
-            gestor:   get(12, ["gestor","manager"]),
-          };
+          const get = (idx, names) => { for (const n of names) { const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase())); if (k !== undefined) return String(r[k] || "").trim(); } return String(r[keys[idx]] || "").trim(); };
+          return { nombre: get(0,["nombre","empresa"]), nif: get(1,["nif","cif"]), calle: get(2,["calle"]), numero: get(3,["numero","número"]), cp: get(4,["cp","postal"]), ciudad: get(5,["ciudad"]), pais: get(6,["pais","país"]) || "España", telefono: get(7,["telefono","teléfono"]), email: get(8,["email","mail"]), contacto: get(9,["contacto"]), canal: get(10,["canal"]), grupo: get(11,["grupo"]), gestor: get(12,["gestor"]), tipo_cliente: get(13,["tipo"]) || "Potencial" };
         }).filter(r => r.nombre);
-        setPreview(mapped);
-        setResult(null);
-      } catch (err) { alert("Error leyendo el archivo: " + err.message); }
+        setPreview(mapped); setResult(null);
+      } catch (err) { alert("Error: " + err.message); }
     };
     reader.readAsBinaryString(file);
   }
-
   async function handleImport() {
     if (!preview?.length) return;
     setImporting(true);
     let ok = 0, skip = 0, err = 0;
     for (const row of preview) {
-      const existe = clients.some(c =>
-        (row.nif && normalize(c.nif) === normalize(row.nif)) ||
-        normalize(c.nombre) === normalize(row.nombre)
-      );
+      const existe = clients.some(c => (row.nif && normalize(c.nif) === normalize(row.nif)) || normalize(c.nombre) === normalize(row.nombre));
       if (existe) { skip++; continue; }
-      try { await sbPost("clientes", row); ok++; }
-      catch { err++; }
+      try { await sbPost("clientes", row); ok++; } catch { err++; }
     }
-    setImporting(false);
-    setResult({ ok, skip, err });
+    setImporting(false); setResult({ ok, skip, err });
     if (ok > 0) onImport();
   }
-
   function downloadTemplate() {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ["Nombre empresa","NIF","Calle","Número","CP","Ciudad","País","Teléfono","Email","Contacto","Canal","Grupo","Gestor"],
-      ["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","932000001","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo"],
-      ["Solo Nombre SL","","","","","","","","","Contacto","","",""],
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Clientes");
-    XLSX.writeFile(wb, "plantilla_clientes.xlsx");
+    const ws = XLSX.utils.aoa_to_sheet([["Nombre empresa","NIF","Calle","Número","CP","Ciudad","País","Teléfono","Email","Contacto","Canal","Grupo","Gestor","Tipo(Potencial/Cliente)"],["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","34612345678","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo","Potencial"]]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Clientes"); XLSX.writeFile(wb, "plantilla_clientes.xlsx");
   }
-
   return (
     <Card>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <span style={{ fontSize: 15, fontWeight: 600 }}>📥 Importar clientes desde Excel</span>
         <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
       </div>
-      <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>
-        Solo <strong>Nombre empresa</strong> es obligatorio. El resto de campos pueden estar vacíos y se completan después.
-      </div>
-      <div style={{ fontSize: 12, background: "#f5f5f5", padding: "8px 12px", borderRadius: 8, marginBottom: 16, color: "#555", fontFamily: "monospace", overflowX: "auto", whiteSpace: "nowrap" }}>
-        Nombre empresa | NIF | Calle | Número | CP | Ciudad | País | Teléfono | Email | Contacto | Canal | Grupo | Gestor
-      </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <Btn variant="success" onClick={downloadTemplate}>⬇ Descargar plantilla</Btn>
-        <Btn variant="primary" onClick={() => { fileRef.current.value = ""; fileRef.current.click(); }}>📂 Seleccionar archivo</Btn>
+        <Btn variant="success" onClick={downloadTemplate}>⬇ Plantilla</Btn>
+        <Btn variant="primary" onClick={() => { fileRef.current.value=""; fileRef.current.click(); }}>📂 Seleccionar archivo</Btn>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: "none" }} />
       </div>
       {preview && (
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} cliente{preview.length !== 1 ? "s" : ""} detectados</div>
-          <div style={{ overflowX: "auto", maxHeight: 220, overflowY: "auto", marginBottom: 12, border: "1px solid #eee", borderRadius: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} clientes</div>
+          <div style={{ overflowX: "auto", maxHeight: 200, overflowY: "auto", marginBottom: 12, border: "1px solid #eee", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead style={{ background: "#f9f9f9", position: "sticky", top: 0 }}>
-                <tr>{["Empresa","NIF","Ciudad","Email","Contacto","Gestor"].map(h => (
-                  <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#555", borderBottom: "1px solid #eee" }}>{h}</th>
-                ))}</tr>
+                <tr>{["Empresa","NIF","Ciudad","Email","Gestor","Tipo"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#555", borderBottom: "1px solid #eee" }}>{h}</th>)}</tr>
               </thead>
-              <tbody>{preview.map((r, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
-                  <td style={{ padding: "5px 8px", fontWeight: 500 }}>{r.nombre}</td>
-                  <td style={{ padding: "5px 8px", color: "#888" }}>{r.nif || "—"}</td>
-                  <td style={{ padding: "5px 8px", color: "#888" }}>{r.ciudad || "—"}</td>
-                  <td style={{ padding: "5px 8px", color: "#888" }}>{r.email || "—"}</td>
-                  <td style={{ padding: "5px 8px" }}>{r.contacto || "—"}</td>
-                  <td style={{ padding: "5px 8px" }}>{r.gestor || "—"}</td>
-                </tr>
-              ))}</tbody>
+              <tbody>{preview.map((r,i) => <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
+                <td style={{ padding: "5px 8px", fontWeight: 500 }}>{r.nombre}</td>
+                <td style={{ padding: "5px 8px", color: "#888" }}>{r.nif||"—"}</td>
+                <td style={{ padding: "5px 8px", color: "#888" }}>{r.ciudad||"—"}</td>
+                <td style={{ padding: "5px 8px", color: "#888" }}>{r.email||"—"}</td>
+                <td style={{ padding: "5px 8px" }}>{r.gestor||"—"}</td>
+                <td style={{ padding: "5px 8px" }}><Badge color={r.tipo_cliente==="Cliente"?"#1d9e75":"#ba7517"} label={r.tipo_cliente||"Potencial"} /></td>
+              </tr>)}</tbody>
             </table>
           </div>
-          {result ? (
-            <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>
-              ✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos (ya existían) · <strong>{result.err}</strong> errores
-            </div>
-          ) : (
-            <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>
-              {importing ? `Importando… (puede tardar unos segundos)` : `Importar ${preview.length} cliente${preview.length !== 1 ? "s" : ""}`}
-            </Btn>
-          )}
+          {result ? <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos · <strong>{result.err}</strong> errores</div>
+          : <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>{importing ? "Importando…" : `Importar ${preview.length} clientes`}</Btn>}
         </div>
       )}
     </Card>
   );
 }
 
+// ── IMPORTACIÓN VENTAS ────────────────────────────────────────────────────────
+function ImportVentas({ clients, onImport, onClose }) {
+  const [preview, setPreview] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState(null);
+  const fileRef = useRef();
+  function handleFile(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: "binary" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const mapped = rows.map(r => {
+          const keys = Object.keys(r);
+          const get = (idx, names) => { for (const n of names) { const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase())); if (k !== undefined) return r[k]; } return r[keys[idx]]; };
+          const codCliente = String(get(0,["codigo cliente","código cliente","cod cliente"]) || "").trim();
+          const cliente = clients.find(c => c.codigo === codCliente);
+          return {
+            codigo_cliente: codCliente,
+            cliente_id: cliente?.id || null,
+            cliente_nombre: cliente?.nombre || codCliente,
+            codigo_producto: String(get(1,["codigo producto","código producto","cod producto"]) || "").trim(),
+            denominacion: String(get(2,["denominacion","denominación","producto","descripcion"]) || "").trim(),
+            unidades: parseFloat(get(3,["unidades","cantidad","qty"]) || 0),
+            precio_unidad: parseFloat(get(4,["precio","precio unidad","precio_unidad","pvp"]) || 0),
+            venta_neta: parseFloat(get(5,["venta neta","venta_neta","importe","total"]) || 0),
+            mes: parseInt(get(6,["mes","month"]) || currMonth),
+            anio: parseInt(get(7,["año","anio","year"]) || currYear),
+            gestor: cliente?.gestor || "",
+          };
+        }).filter(r => r.codigo_cliente || r.denominacion);
+        setPreview(mapped); setResult(null);
+      } catch (err) { alert("Error: " + err.message); }
+    };
+    reader.readAsBinaryString(file);
+  }
+  async function handleImport() {
+    if (!preview?.length) return;
+    setImporting(true);
+    let ok = 0, err = 0;
+    for (const row of preview) {
+      try { await sbPost("ventas", { cliente_id: row.cliente_id, codigo_cliente: row.codigo_cliente, codigo_producto: row.codigo_producto, denominacion: row.denominacion, unidades: row.unidades, precio_unidad: row.precio_unidad, venta_neta: row.venta_neta, mes: row.mes, anio: row.anio, gestor: row.gestor }); ok++; }
+      catch { err++; }
+    }
+    setImporting(false); setResult({ ok, err });
+    if (ok > 0) onImport();
+  }
+  function downloadTemplate() {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Código Cliente","Código Producto","Denominación Producto","Unidades","Precio por Unidad","Venta Neta","Mes","Año"],
+      ["CL000001","PROD001","Pan Sin Gluten 500g","100","3.50","350","4","2026"]
+    ]);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Ventas"); XLSX.writeFile(wb, "plantilla_ventas.xlsx");
+  }
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>📊 Importar ventas desde Excel</span>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      </div>
+      <div style={{ fontSize: 12, background: "#f5f5f5", padding: "8px 12px", borderRadius: 8, marginBottom: 12, color: "#555", fontFamily: "monospace", overflowX: "auto", whiteSpace: "nowrap" }}>
+        Código Cliente | Código Producto | Denominación | Unidades | Precio Unidad | Venta Neta | Mes | Año
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <Btn variant="success" onClick={downloadTemplate}>⬇ Plantilla</Btn>
+        <Btn variant="primary" onClick={() => { fileRef.current.value=""; fileRef.current.click(); }}>📂 Seleccionar archivo</Btn>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: "none" }} />
+      </div>
+      {preview && (
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} líneas</div>
+          <div style={{ overflowX: "auto", maxHeight: 200, overflowY: "auto", marginBottom: 12, border: "1px solid #eee", borderRadius: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead style={{ background: "#f9f9f9", position: "sticky", top: 0 }}>
+                <tr>{["Cód.Cliente","Cliente","Cód.Producto","Producto","Uds","P.Unit","Venta Neta","Mes/Año"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#555", borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>{h}</th>)}</tr>
+              </thead>
+              <tbody>{preview.map((r,i) => <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
+                <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 11 }}>{r.codigo_cliente}</td>
+                <td style={{ padding: "5px 8px", fontWeight: 500 }}>{r.cliente_nombre}</td>
+                <td style={{ padding: "5px 8px", color: "#888", fontSize: 11 }}>{r.codigo_producto}</td>
+                <td style={{ padding: "5px 8px" }}>{r.denominacion}</td>
+                <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.unidades}</td>
+                <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.precio_unidad?.toFixed(2)}</td>
+                <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600, color: "#1d9e75" }}>{r.venta_neta?.toFixed(2)}</td>
+                <td style={{ padding: "5px 8px", color: "#888" }}>{MESES[(r.mes||1)-1]?.slice(0,3)} {r.anio}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+          {result ? <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>✅ <strong>{result.ok}</strong> líneas importadas · <strong>{result.err}</strong> errores</div>
+          : <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>{importing ? "Importando…" : `Importar ${preview.length} líneas`}</Btn>}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ── GRÁFICO VENTAS ────────────────────────────────────────────────────────────
+function VentasChart({ data, groupBy }) {
+  const canvasRef = useRef();
+  const chartRef = useRef();
+  useEffect(() => {
+    if (!data.length) return;
+    if (chartRef.current) chartRef.current.destroy();
+    const labels = [...new Set(data.map(d => d.label))];
+    const totals = labels.map(l => data.filter(d => d.label === l).reduce((s, d) => s + (d.venta_neta || 0), 0));
+    chartRef.current = new Chart(canvasRef.current, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "Venta Neta (€)", data: totals, backgroundColor: "#8ecfd488", borderColor: "#5bb5bc", borderWidth: 2, borderRadius: 6 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `€ ${ctx.raw.toLocaleString("es-ES", { minimumFractionDigits: 2 })}` } } },
+        scales: { y: { ticks: { callback: v => `€${v.toLocaleString("es-ES")}` } } }
+      }
+    });
+    return () => { if (chartRef.current) chartRef.current.destroy(); };
+  }, [data]);
+  if (!data.length) return <div style={{ textAlign: "center", color: "#aaa", padding: "2rem", fontSize: 13 }}>Sin datos para mostrar.</div>;
+  return <div style={{ height: 300, position: "relative" }}><canvas ref={canvasRef} /></div>;
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
-  // Sesión persistente — se mantiene hasta que el usuario cierra sesión
-  const [currentUser, setCurrentUser] = useState(() => {
-    try { const s = sessionStorage.getItem("crm_session"); return s ? JSON.parse(s) : null; } catch { return null; }
-  });
+  const [currentUser, setCurrentUser] = useState(() => { try { const s = sessionStorage.getItem("crm_session"); return s ? JSON.parse(s) : null; } catch { return null; } });
   const [tab, setTab] = useState("Dashboard");
   const [config, setConfigState] = useState({ canales: [], grupos: [], gestores: [] });
   const [clients, setClients] = useState([]);
   const [activities, setActivities] = useState([]);
-  const [tasks, setTasks] = useState([]);
+  const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [clientPanel, setClientPanel] = useState(null);
   const [detalleId, setDetalleId] = useState(null);
   const [actPanel, setActPanel] = useState(null);
-  const [taskPanel, setTaskPanel] = useState(null);
-  const [showImport, setShowImport] = useState(false);
-  const [filter, setFilter] = useState({ canal: "", grupo: "", gestor: "" });
+  const [showImportCli, setShowImportCli] = useState(false);
+  const [showImportVen, setShowImportVen] = useState(false);
+  const [filter, setFilter] = useState({ canal: "", grupo: "", gestor: "", tipo_cliente: "" });
+  const [actFiltro, setActFiltro] = useState({ gestor: "", estado: "", tipo: "" });
   const [dashGestor, setDashGestor] = useState("");
-  const [actFiltro, setActFiltro] = useState({ gestor: "", estado: "" });
-  const [taskFiltro, setTaskFiltro] = useState({ gestor: "", estado: "" });
-  const [rptFilter, setRptFilter] = useState({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" });
+  const [ventasFiltro, setVentasFiltro] = useState({ canal: "", gestor: "", grupo: "", mes: "", anio: String(currYear), desde: "", hasta: "", groupBy: "mes" });
   const [newVal, setNewVal] = useState({ canal: "", grupo: "", gestor: "" });
 
   const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
@@ -646,25 +730,20 @@ function CRM() {
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [cfgRows, cls, acts, tsk] = await Promise.all([
+      const [cfgRows, cls, acts, vts] = await Promise.all([
         sbGet("config", "select=clave,valor"),
         sbGet("clientes", "select=*&order=nombre.asc"),
         sbGet("actividades", "select=*&order=fecha.desc"),
-        sbGet("tareas", "select=*&order=fecha.asc"),
+        sbGet("ventas", "select=*&order=anio.desc,mes.desc"),
       ]);
       const cfg = { canales: [], grupos: [], gestores: [] };
-      cfgRows.forEach(r => {
-        if (r.clave === "canales")  cfg.canales  = r.valor;
-        if (r.clave === "grupos")   cfg.grupos   = r.valor;
-        if (r.clave === "gestores") cfg.gestores = r.valor;
-      });
-      setConfigState(cfg); setClients(cls); setActivities(acts); setTasks(tsk);
+      cfgRows.forEach(r => { if (r.clave==="canales") cfg.canales=r.valor; if (r.clave==="grupos") cfg.grupos=r.valor; if (r.clave==="gestores") cfg.gestores=r.valor; });
+      setConfigState(cfg); setClients(cls); setActivities(acts); setVentas(vts);
     } catch (e) { setError("No se pudo conectar. " + e.message); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { if (currentUser) loadAll(); }, [currentUser, loadAll]);
-
   function handleLogin(u) { sessionStorage.setItem("crm_session", JSON.stringify(u)); setCurrentUser(u); }
   function handleLogout() { sessionStorage.removeItem("crm_session"); setCurrentUser(null); }
 
@@ -677,9 +756,17 @@ function CRM() {
   async function saveClient(form) {
     setSaving(true);
     try {
-      const body = { nombre: form.nombre, nif: form.nif, calle: form.calle, numero: form.numero, cp: form.cp, ciudad: form.ciudad, pais: form.pais, telefono: form.telefono, email: form.email, contacto: form.contacto, canal: form.canal, grupo: form.grupo, gestor: form.gestor };
-      if (form.id) await sbPatch("clientes", form.id, body);
-      else await sbPost("clientes", body);
+      const body = { nombre: form.nombre, nif: form.nif, calle: form.calle, numero: form.numero, cp: form.cp, ciudad: form.ciudad, pais: form.pais, telefono: form.telefono, email: form.email, contacto: form.contacto, canal: form.canal, grupo: form.grupo, gestor: form.gestor, tipo_cliente: form.tipo_cliente || "Potencial" };
+      let result;
+      if (form.id) { result = await sbPatch("clientes", form.id, body); result = Array.isArray(result) ? result[0] : result; }
+      else {
+        // Generar código correlativo
+        const allCodes = clients.map(c => c.codigo).filter(Boolean);
+        const maxNum = allCodes.length ? Math.max(...allCodes.map(c => parseInt(c.replace("CL","")) || 0)) : 0;
+        body.codigo = "CL" + String(maxNum + 1).padStart(6, "0");
+        result = await sbPost("clientes", body);
+        result = Array.isArray(result) ? result[0] : result;
+      }
       await loadAll(); setClientPanel(null);
     } catch (e) { alert("Error: " + e.message); }
     finally { setSaving(false); }
@@ -692,7 +779,7 @@ function CRM() {
   async function saveActivity(form) {
     setSaving(true);
     try {
-      const body = { cliente_id: form.clienteId, tipo: form.tipo, nota: form.nota, fecha: form.fecha, gestor: form.gestor, estado: form.estado || "Pendiente" };
+      const body = { cliente_id: form.clienteId, tipo: form.tipo, titulo: form.titulo, nota: form.nota, fecha: form.fecha, gestor: form.gestor, estado: form.estado || "Pendiente", prioridad: form.prioridad || "Media" };
       if (form.id) await sbPatch("actividades", form.id, body);
       else await sbPost("actividades", body);
       await loadAll(); setActPanel(null);
@@ -703,166 +790,129 @@ function CRM() {
     try { await sbDelete("actividades", id); setActivities(p => p.filter(a => a.id !== id)); }
     catch (e) { alert("Error: " + e.message); }
   }
-  async function saveTask(form) {
-    setSaving(true);
-    try {
-      const body = { cliente_id: form.clienteId, titulo: form.titulo, fecha: form.fecha, prioridad: form.prioridad, estado: form.estado, gestor: form.gestor };
-      if (form.id) await sbPatch("tareas", form.id, body);
-      else await sbPost("tareas", body);
-      await loadAll(); setTaskPanel(null);
-    } catch (e) { alert("Error: " + e.message); }
-    finally { setSaving(false); }
-  }
-  async function toggleTask(t) {
-    const estado = t.estado === "Completada" ? "Pendiente" : "Completada";
-    try { await sbPatch("tareas", t.id, { estado }); setTasks(p => p.map(x => x.id === t.id ? { ...x, estado } : x)); }
-    catch (e) { alert("Error: " + e.message); }
-  }
-  async function deleteTask(id) {
-    try { await sbDelete("tareas", id); setTasks(p => p.filter(t => t.id !== id)); }
-    catch (e) { alert("Error: " + e.message); }
-  }
 
   const filteredClients = useMemo(() => clients.filter(c =>
     (!filter.canal || c.canal === filter.canal) &&
     (!filter.grupo || c.grupo === filter.grupo) &&
-    (!filter.gestor || c.gestor === filter.gestor)
+    (!filter.gestor || c.gestor === filter.gestor) &&
+    (!filter.tipo_cliente || c.tipo_cliente === filter.tipo_cliente)
   ), [clients, filter]);
+
+  // Ventas filtradas
+  const ventasFilt = useMemo(() => {
+    return ventas.filter(v => {
+      const cliente = clients.find(c => c.id === v.cliente_id);
+      if (ventasFiltro.canal && cliente?.canal !== ventasFiltro.canal) return false;
+      if (ventasFiltro.grupo && cliente?.grupo !== ventasFiltro.grupo) return false;
+      if (ventasFiltro.gestor && v.gestor !== ventasFiltro.gestor) return false;
+      if (ventasFiltro.mes && String(v.mes) !== ventasFiltro.mes) return false;
+      if (ventasFiltro.anio && String(v.anio) !== ventasFiltro.anio) return false;
+      return true;
+    });
+  }, [ventas, ventasFiltro, clients]);
+
+  const ventasChart = useMemo(() => {
+    if (ventasFiltro.groupBy === "mes") {
+      return ventasFilt.map(v => ({ ...v, label: `${MESES[(v.mes||1)-1].slice(0,3)} ${v.anio}` }));
+    } else if (ventasFiltro.groupBy === "gestor") {
+      return ventasFilt.map(v => ({ ...v, label: v.gestor || "Sin gestor" }));
+    } else if (ventasFiltro.groupBy === "canal") {
+      return ventasFilt.map(v => ({ ...v, label: clients.find(c => c.id === v.cliente_id)?.canal || "Sin canal" }));
+    }
+    return ventasFilt.map(v => ({ ...v, label: clientName(v.cliente_id) }));
+  }, [ventasFilt, ventasFiltro.groupBy]);
 
   if (!currentUser) return <Login onLogin={handleLogin} />;
 
   // ── TABS ──────────────────────────────────────────────────────────────────
   function Dashboard() {
-    const actsFilt = activities.filter(a => (!dashGestor || a.gestor === dashGestor) && a.estado !== "Completada");
-    const tasksFilt = tasks.filter(t => (!dashGestor || t.gestor === dashGestor) && t.estado !== "Completada");
+    const actsPend  = activities.filter(a => (!dashGestor || a.gestor === dashGestor) && a.estado !== "Completada");
+    const ventasMes = ventas.filter(v => v.mes === currMonth && v.anio === currYear && (!dashGestor || v.gestor === dashGestor));
+    const totalVentaMes = ventasMes.reduce((s, v) => s + (v.venta_neta || 0), 0);
     return <div>
-      <NotifBanner tasks={tasks} clients={clients} filterGestor={dashGestor} />
-      {/* Filtro gestor dashboard */}
+      <NotifBanner tasks={activities} clients={clients} filterGestor={dashGestor} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <div style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>Ver dashboard de:</div>
-        <div style={{ width: 200 }}>
-          <Sel value={dashGestor} onChange={setDashGestor} options={config.gestores} placeholder="Todos los gestores" />
-        </div>
+        <div style={{ width: 200 }}><Sel value={dashGestor} onChange={setDashGestor} options={config.gestores} placeholder="Todos los gestores" /></div>
         {dashGestor && <Btn onClick={() => setDashGestor("")}>Ver todos</Btn>}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          ["Clientes", dashGestor ? clients.filter(c => c.gestor === dashGestor).length : clients.length, "#185fa5"],
-          ["Actividades pendientes", actsFilt.length, "#1d9e75"],
-          ["Tareas pendientes", tasksFilt.length, "#ba7517"]
-        ].map(([l, v, c]) => (
+          ["Clientes", dashGestor ? clients.filter(c=>c.gestor===dashGestor).length : clients.length, "#185fa5"],
+          ["Potenciales", clients.filter(c=>c.tipo_cliente==="Potencial"&&(!dashGestor||c.gestor===dashGestor)).length, "#ba7517"],
+          ["Actividades pend.", actsPend.length, "#1d9e75"],
+          [`Venta ${MESES[currMonth-1]}`, `€${totalVentaMes.toLocaleString("es-ES",{minimumFractionDigits:2})}`, "#7f77dd"]
+        ].map(([l,v,c]) => (
           <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 10, padding: "1rem", textAlign: "center" }}>
             <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{l}</div>
-            <div style={{ fontSize: 28, fontWeight: 600, color: c }}>{v}</div>
+            <div style={{ fontSize: typeof v === "string" && v.startsWith("€") ? 18 : 28, fontWeight: 600, color: c }}>{v}</div>
           </div>
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Actividades pendientes{dashGestor ? ` — ${dashGestor}` : ""}</div>
-          {actsFilt.slice(0, 5).map(a => (
-            <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Actividades pendientes{dashGestor?` — ${dashGestor}`:""}</div>
+          {actsPend.slice(0,5).map(a => (
+            <div key={a.id} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
               <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-              <div>
-                <div style={{ fontSize: 13 }}>{clientName(a.cliente_id)}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · <strong>{a.gestor}</strong></div>
-              </div>
+              <div><div style={{ fontSize: 13 }}>{clientName(a.cliente_id)}</div><div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · <strong>{a.gestor}</strong></div></div>
             </div>
           ))}
-          {actsFilt.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin actividades pendientes.</div>}
+          {actsPend.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin pendientes.</div>}
         </Card>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Tareas pendientes{dashGestor ? ` — ${dashGestor}` : ""}</div>
-          {tasksFilt.slice(0, 5).map(t => {
-            const d = diffDays(t.fecha);
-            const alerta = d < 0 ? "#e24b4a" : d === 0 ? "#ba7517" : d <= 3 ? "#d97706" : null;
-            return (
-              <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
-                <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13 }}>{t.titulo}</div>
-                  <div style={{ fontSize: 11, color: alerta || "#888" }}>{clientName(t.cliente_id)} · {t.fecha} · <strong>{t.gestor}</strong>{alerta ? (d < 0 ? " ⚠️" : " ⏰") : ""}</div>
-                </div>
-              </div>
-            );
-          })}
-          {tasksFilt.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin tareas pendientes.</div>}
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#555" }}>Venta mensual {currYear}</div>
+          <VentasChart data={ventas.filter(v=>v.anio===currYear&&(!dashGestor||v.gestor===dashGestor)).map(v=>({ ...v, label: MESES[(v.mes||1)-1].slice(0,3) }))} groupBy="mes" />
         </Card>
       </div>
-      <Card>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Exportar datos</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn variant="success" onClick={() => downloadCSV(toCSV(clients, [
-            { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" },
-            { key: "telefono", label: "Teléfono" }, { key: "email", label: "Email" }, { key: "contacto", label: "Contacto" },
-            { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" }
-          ]), "clientes.csv")}>⬇ Clientes</Btn>
-          <Btn variant="success" onClick={() => downloadCSV(toCSV(activities.map(a => ({ ...a, cliente: clientName(a.cliente_id) })), [
-            { key: "cliente", label: "Cliente" }, { key: "tipo", label: "Tipo" }, { key: "estado", label: "Estado" },
-            { key: "nota", label: "Nota" }, { key: "fecha", label: "Fecha" }, { key: "gestor", label: "Gestor" }
-          ]), "actividades.csv")}>⬇ Actividades</Btn>
-          <Btn variant="success" onClick={() => downloadCSV(toCSV(tasks.map(t => ({ ...t, cliente: clientName(t.cliente_id) })), [
-            { key: "cliente", label: "Cliente" }, { key: "titulo", label: "Tarea" }, { key: "fecha", label: "Fecha" },
-            { key: "prioridad", label: "Prioridad" }, { key: "estado", label: "Estado" }, { key: "gestor", label: "Gestor" }
-          ]), "tareas.csv")}>⬇ Tareas</Btn>
-          <Btn onClick={loadAll} style={{ marginLeft: "auto" }}>↻ Actualizar</Btn>
-        </div>
-      </Card>
     </div>;
   }
 
   function TabClientes() {
     return <div>
-      {showImport && <ImportExcel config={config} clients={clients} onImport={async () => { await loadAll(); setShowImport(false); }} onClose={() => setShowImport(false)} />}
-      {clientPanel === "new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} currentUser={currentUser} />}
-      {clientPanel && clientPanel !== "new" && <ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={() => setClientPanel(null)} saving={saving} currentUser={currentUser} />}
-      {detalleId && !clientPanel && <DetalleCliente cliente={clients.find(c => c.id === detalleId)} activities={activities} tasks={tasks} onClose={() => setDetalleId(null)} />}
-      {!clientPanel && !showImport && <>
+      {showImportCli && <ImportExcel config={config} clients={clients} onImport={async()=>{await loadAll();setShowImportCli(false);}} onClose={()=>setShowImportCli(false)} />}
+      {clientPanel==="new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={()=>setClientPanel(null)} saving={saving} currentUser={currentUser} />}
+      {clientPanel && clientPanel!=="new" && <ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={()=>setClientPanel(null)} saving={saving} currentUser={currentUser} />}
+      {detalleId && !clientPanel && <DetalleCliente cliente={clients.find(c=>c.id===detalleId)} activities={activities} onClose={()=>setDetalleId(null)} />}
+      {!clientPanel && !showImportCli && <>
         <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-          <Sel value={filter.canal} onChange={v => setFilter(f => ({ ...f, canal: v }))} options={config.canales} placeholder="Canal" />
-          <Sel value={filter.grupo} onChange={v => setFilter(f => ({ ...f, grupo: v }))} options={config.grupos} placeholder="Grupo" />
-          <Sel value={filter.gestor} onChange={v => setFilter(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Gestor" />
-          <Btn onClick={() => setFilter({ canal: "", grupo: "", gestor: "" })}>Limpiar</Btn>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <Btn variant="warning" onClick={() => { setDetalleId(null); setClientPanel(null); setShowImport(true); }}>📥 Importar Excel</Btn>
-            <Btn variant="primary" onClick={() => { setDetalleId(null); setShowImport(false); setClientPanel("new"); }}>+ Nuevo cliente</Btn>
+          <Sel value={filter.tipo_cliente} onChange={v=>setFilter(f=>({...f,tipo_cliente:v}))} options={TIPOS_CLIENTE} placeholder="Tipo" />
+          <Sel value={filter.canal} onChange={v=>setFilter(f=>({...f,canal:v}))} options={config.canales} placeholder="Canal" />
+          <Sel value={filter.grupo} onChange={v=>setFilter(f=>({...f,grupo:v}))} options={config.grupos} placeholder="Grupo" />
+          <Sel value={filter.gestor} onChange={v=>setFilter(f=>({...f,gestor:v}))} options={config.gestores} placeholder="Gestor" />
+          <Btn onClick={()=>setFilter({canal:"",grupo:"",gestor:"",tipo_cliente:""})}>Limpiar</Btn>
+          <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+            <Btn variant="warning" onClick={()=>{setDetalleId(null);setClientPanel(null);setShowImportCli(true);}}>📥 Importar</Btn>
+            <Btn variant="primary" onClick={()=>{setDetalleId(null);setShowImportCli(false);setClientPanel("new");}}>+ Nuevo</Btn>
           </div>
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
-            <thead style={{ background: "#f9f9f9" }}>
-              <tr>{["Empresa", "NIF", "Ciudad", "Teléfono", "Email", "Gestor", ""].map(h => (
-                <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee" }}>{h}</th>
-              ))}</tr>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, background:"#fff", borderRadius:10 }}>
+            <thead style={{ background:"#f9f9f9" }}>
+              <tr>{["Código","Empresa","NIF","Ciudad","Teléfono","Email","Tipo","Gestor",""].map(h=><th key={h} style={{ textAlign:"left", padding:"8px 10px", fontWeight:600, color:"#555", fontSize:12, borderBottom:"1px solid #eee", whiteSpace:"nowrap" }}>{h}</th>)}</tr>
             </thead>
-            <tbody>{filteredClients.map(c => (
-              <tr key={c.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                <td style={{ padding: "9px 10px", fontWeight: 500, cursor: "pointer", color: "#185fa5" }} onClick={() => { setClientPanel(null); setShowImport(false); setDetalleId(detalleId === c.id ? null : c.id); }}>{c.nombre} <span style={{ fontSize: 10, color: "#aaa" }}>▶</span></td>
-                <td style={{ padding: "9px 10px", color: "#888", fontSize: 12 }}>{c.nif}</td>
-                <td style={{ padding: "9px 10px", fontSize: 12, color: "#666" }}>{c.ciudad}</td>
-                <td style={{ padding: "9px 10px", fontSize: 12 }}>
-                  {c.telefono ? (
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{ color: "#555" }}>{c.telefono}</span>
-                      <a href={`tel:${c.telefono}`} title="Llamar" style={{ textDecoration: "none", fontSize: 16 }}>📞</a>
-                      <a href={`https://wa.me/${c.telefono.replace(/[\s+\-()]/g, "")}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ textDecoration: "none", fontSize: 16 }}>💬</a>
-                    </div>
-                  ) : "—"}
+            <tbody>{filteredClients.map(c=>(
+              <tr key={c.id} style={{ borderBottom:"1px solid #f0f0f0" }}>
+                <td style={{ padding:"9px 10px", fontSize:11, fontFamily:"monospace", color:"#185fa5", fontWeight:600 }}>{c.codigo||"—"}</td>
+                <td style={{ padding:"9px 10px", fontWeight:500, cursor:"pointer", color:"#185fa5" }} onClick={()=>{setClientPanel(null);setShowImportCli(false);setDetalleId(detalleId===c.id?null:c.id);}}>{c.nombre} <span style={{ fontSize:10, color:"#aaa" }}>▶</span></td>
+                <td style={{ padding:"9px 10px", color:"#888", fontSize:12 }}>{c.nif}</td>
+                <td style={{ padding:"9px 10px", fontSize:12, color:"#666" }}>{c.ciudad}</td>
+                <td style={{ padding:"9px 10px", fontSize:12 }}>
+                  {c.telefono ? <span>{c.telefono} <a href={`tel:${c.telefono}`} style={{ textDecoration:"none" }}>📞</a> <a href={`https://wa.me/${c.telefono.replace(/[\s+\-()]/g,"")}`} target="_blank" style={{ textDecoration:"none" }}>💬</a></span> : "—"}
                 </td>
-                <td style={{ padding: "9px 10px", fontSize: 12 }}>
-                  {c.email ? <a href={`mailto:${c.email}`} style={{ color: "#185fa5", textDecoration: "none", fontWeight: 500 }}>✉️ {c.email}</a> : "—"}
-                </td>
-                <td style={{ padding: "9px 10px", fontSize: 12 }}>{c.gestor}</td>
-                <td style={{ padding: "9px 10px" }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <Btn onClick={() => { setDetalleId(null); setClientPanel(c); }}>Editar</Btn>
-                    <Btn onClick={() => deleteClient(c.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
+                <td style={{ padding:"9px 10px", fontSize:12 }}>{c.email?<a href={`mailto:${c.email}`} style={{ color:"#185fa5", textDecoration:"none" }}>✉️ {c.email}</a>:"—"}</td>
+                <td style={{ padding:"9px 10px" }}><Badge color={c.tipo_cliente==="Cliente"?"#1d9e75":"#ba7517"} label={c.tipo_cliente||"Potencial"} /></td>
+                <td style={{ padding:"9px 10px", fontSize:12 }}>{c.gestor}</td>
+                <td style={{ padding:"9px 10px" }}>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <Btn onClick={()=>{setDetalleId(null);setClientPanel(c);}}>Editar</Btn>
+                    <Btn onClick={()=>deleteClient(c.id)} style={{ color:"#e24b4a", borderColor:"#fca5a5" }}>Borrar</Btn>
                   </div>
                 </td>
               </tr>
             ))}</tbody>
           </table>
-          {filteredClients.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin clientes.</div>}
+          {filteredClients.length===0 && <div style={{ textAlign:"center", color:"#aaa", marginTop:24, fontSize:13 }}>Sin clientes.</div>}
         </div>
       </>}
     </div>;
@@ -871,160 +921,191 @@ function CRM() {
   function TabActividades() {
     const actsFilt = activities.filter(a =>
       (!actFiltro.gestor || a.gestor === actFiltro.gestor) &&
-      (!actFiltro.estado || a.estado === actFiltro.estado)
+      (!actFiltro.estado || a.estado === actFiltro.estado) &&
+      (!actFiltro.tipo   || a.tipo   === actFiltro.tipo)
     );
     return <div>
-      {actPanel !== null && <ActividadForm initial={actPanel === "new" ? {} : { ...actPanel, clienteId: actPanel.cliente_id }} config={config} clients={clients} onSave={saveActivity} onCancel={() => setActPanel(null)} saving={saving} currentUser={currentUser} />}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <Sel value={actFiltro.gestor} onChange={v => setActFiltro(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Todos los gestores" />
-        <Sel value={actFiltro.estado} onChange={v => setActFiltro(f => ({ ...f, estado: v }))} options={ESTADOS_ACT} placeholder="Todos los estados" />
-        {(actFiltro.gestor || actFiltro.estado) && <Btn onClick={() => setActFiltro({ gestor: "", estado: "" })}>Limpiar</Btn>}
-        <Btn variant="primary" onClick={() => setActPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva actividad</Btn>
+      {actPanel!==null && <ActividadForm initial={actPanel==="new"?{}:{...actPanel,clienteId:actPanel.cliente_id}} config={config} clients={clients} onSave={saveActivity} onCancel={()=>setActPanel(null)} saving={saving} currentUser={currentUser} />}
+      <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
+        <Sel value={actFiltro.gestor} onChange={v=>setActFiltro(f=>({...f,gestor:v}))} options={config.gestores} placeholder="Todos los gestores" />
+        <Sel value={actFiltro.estado} onChange={v=>setActFiltro(f=>({...f,estado:v}))} options={ESTADOS_ACT} placeholder="Todos los estados" />
+        <Sel value={actFiltro.tipo}   onChange={v=>setActFiltro(f=>({...f,tipo:v}))}   options={TIPOS}       placeholder="Todos los tipos" />
+        {(actFiltro.gestor||actFiltro.estado||actFiltro.tipo) && <Btn onClick={()=>setActFiltro({gestor:"",estado:"",tipo:""})}>Limpiar</Btn>}
+        <Btn variant="primary" onClick={()=>setActPanel("new")} style={{ marginLeft:"auto" }}>+ Nueva actividad</Btn>
       </div>
-      {actsFilt.map(a => (
-        <div key={a.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 10px", marginBottom: 4, borderRadius: 8, border: "1px solid #f0f0f0", background: "#fff" }}>
-          <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-          <Badge color={estadoColor[a.estado || "Pendiente"]} label={a.estado || "Pendiente"} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{clientName(a.cliente_id)}</div>
-            <div style={{ fontSize: 13, color: "#555", marginTop: 2 }}>{a.nota}</div>
-            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{a.fecha} · <strong>{a.gestor}</strong></div>
-          </div>
-          <Btn onClick={() => setActPanel(a)}>Editar</Btn>
-          <Btn onClick={() => deleteActivity(a.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
-        </div>
-      ))}
-      {actsFilt.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin actividades.</div>}
-    </div>;
-  }
-
-  function TabTareas() {
-    const tasksFilt = tasks.filter(t =>
-      (!taskFiltro.gestor || t.gestor === taskFiltro.gestor) &&
-      (!taskFiltro.estado || t.estado === taskFiltro.estado)
-    );
-    return <div>
-      {taskPanel !== null && <TareaForm initial={taskPanel === "new" ? {} : { ...taskPanel, clienteId: taskPanel.cliente_id }} config={config} clients={clients} onSave={saveTask} onCancel={() => setTaskPanel(null)} saving={saving} currentUser={currentUser} />}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <Sel value={taskFiltro.gestor} onChange={v => setTaskFiltro(f => ({ ...f, gestor: v }))} options={config.gestores} placeholder="Todos los gestores" />
-        <Sel value={taskFiltro.estado} onChange={v => setTaskFiltro(f => ({ ...f, estado: v }))} options={ESTADOS_TAREA} placeholder="Todos los estados" />
-        {(taskFiltro.gestor || taskFiltro.estado) && <Btn onClick={() => setTaskFiltro({ gestor: "", estado: "" })}>Limpiar</Btn>}
-        <Btn variant="primary" onClick={() => setTaskPanel("new")} style={{ marginLeft: "auto" }}>+ Nueva tarea</Btn>
-      </div>
-      {tasksFilt.map(t => {
-        const d = diffDays(t.fecha);
-        const alerta = t.estado !== "Completada" && (d < 0 ? "#fef2f2" : d === 0 ? "#fff7ed" : d <= 3 ? "#fffbeb" : null);
+      {actsFilt.map(a => {
+        const d = diffDays(a.fecha);
+        const alerta = a.estado!=="Completada" && (d<0?"#fef2f2":d===0?"#fff7ed":d<=3?"#fffbeb":null);
         return (
-          <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "12px 10px", marginBottom: 4, borderRadius: 8, background: alerta || "#fff", border: `1px solid ${alerta ? (d < 0 ? "#fca5a5" : d === 0 ? "#fed7aa" : "#fde68a") : "#f0f0f0"}` }}>
-            <input type="checkbox" checked={t.estado === "Completada"} onChange={() => toggleTask(t)} style={{ cursor: "pointer", width: 16, height: 16 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, textDecoration: t.estado === "Completada" ? "line-through" : "none", color: t.estado === "Completada" ? "#aaa" : "#1a1a1a" }}>{t.titulo}</div>
-              <div style={{ fontSize: 11, color: t.estado !== "Completada" && d < 0 ? "#e24b4a" : "#aaa", marginTop: 2 }}>
-                {clientName(t.cliente_id)} · {t.fecha} · <strong>{t.gestor}</strong>
-                {t.estado !== "Completada" && d < 0 && " ⚠️ Vencida"}
-                {t.estado !== "Completada" && d === 0 && " ⚠️ Hoy"}
-                {t.estado !== "Completada" && d > 0 && d <= 3 && ` ⏰ ${d}d`}
-              </div>
+          <div key={a.id} style={{ display:"flex", gap:10, alignItems:"flex-start", padding:"12px 10px", marginBottom:4, borderRadius:8, background:alerta||"#fff", border:`1px solid ${alerta?(d<0?"#fca5a5":d===0?"#fed7aa":"#fde68a"):"#f0f0f0"}` }}>
+            <Badge color={tipoColor[a.tipo]} label={a.tipo} />
+            <Badge color={estadoColor[a.estado||"Pendiente"]} label={a.estado||"Pendiente"} />
+            <div style={{ flex:1 }}>
+              {a.titulo && <div style={{ fontSize:13, fontWeight:600 }}>{a.titulo}</div>}
+              <div style={{ fontSize:13, fontWeight:500 }}>{clientName(a.cliente_id)}</div>
+              <div style={{ fontSize:12, color:"#555", marginTop:2 }}>{a.nota}</div>
+              <div style={{ fontSize:11, color:"#aaa", marginTop:2 }}>{a.fecha} · <strong>{a.gestor}</strong> · <Badge color={prioColor[a.prioridad||"Media"]} label={a.prioridad||"Media"} /></div>
             </div>
-            <Badge color={prioColor[t.prioridad]} label={t.prioridad} />
-            <Badge color={estadoColor[t.estado]} label={t.estado} />
-            <Btn onClick={() => setTaskPanel(t)}>Editar</Btn>
-            <Btn onClick={() => deleteTask(t.id)} style={{ color: "#e24b4a", borderColor: "#fca5a5" }}>Borrar</Btn>
+            <Btn onClick={()=>setActPanel(a)}>Editar</Btn>
+            <Btn onClick={()=>deleteActivity(a.id)} style={{ color:"#e24b4a", borderColor:"#fca5a5" }}>Borrar</Btn>
           </div>
         );
       })}
-      {tasksFilt.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin tareas.</div>}
+      {actsFilt.length===0 && <div style={{ textAlign:"center", color:"#aaa", marginTop:24, fontSize:13 }}>Sin actividades.</div>}
+    </div>;
+  }
+
+  function TabVentas() {
+    const totalVenta = ventasFilt.reduce((s,v)=>s+(v.venta_neta||0),0);
+    const totalUds   = ventasFilt.reduce((s,v)=>s+(v.unidades||0),0);
+    return <div>
+      {showImportVen && <ImportVentas clients={clients} onImport={async()=>{await loadAll();setShowImportVen(false);}} onClose={()=>setShowImportVen(false)} />}
+      {!showImportVen && <>
+        <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap", alignItems:"flex-end" }}>
+          {[["Canal","canal",config.canales],["Gestor","gestor",config.gestores],["Grupo","grupo",config.grupos]].map(([l,k,opts])=>(
+            <div key={k} style={{ flex:"1 1 120px" }}>
+              <div style={{ fontSize:11, color:"#888", marginBottom:3 }}>{l}</div>
+              <Sel value={ventasFiltro[k]} onChange={v=>setVentasFiltro(f=>({...f,[k]:v}))} options={opts} placeholder="Todos" />
+            </div>
+          ))}
+          <div style={{ flex:"1 1 100px" }}>
+            <div style={{ fontSize:11, color:"#888", marginBottom:3 }}>Mes</div>
+            <Sel value={ventasFiltro.mes} onChange={v=>setVentasFiltro(f=>({...f,mes:v}))} options={MESES.map((_,i)=>String(i+1))} placeholder="Todos" />
+          </div>
+          <div style={{ flex:"1 1 80px" }}>
+            <div style={{ fontSize:11, color:"#888", marginBottom:3 }}>Año</div>
+            <Inp value={ventasFiltro.anio} onChange={v=>setVentasFiltro(f=>({...f,anio:v}))} placeholder="2026" />
+          </div>
+          <div style={{ flex:"1 1 120px" }}>
+            <div style={{ fontSize:11, color:"#888", marginBottom:3 }}>Agrupar gráfico</div>
+            <Sel value={ventasFiltro.groupBy} onChange={v=>setVentasFiltro(f=>({...f,groupBy:v}))} options={["mes","gestor","canal","cliente"]} />
+          </div>
+          <Btn onClick={()=>setVentasFiltro({canal:"",gestor:"",grupo:"",mes:"",anio:String(currYear),desde:"",hasta:"",groupBy:"mes"})}>Limpiar</Btn>
+          <Btn variant="warning" onClick={()=>setShowImportVen(true)}>📥 Importar Excel</Btn>
+          <Btn variant="success" onClick={()=>downloadCSV(toCSV(ventasFilt.map(v=>({...v,cliente:clientName(v.cliente_id),mes_nombre:MESES[(v.mes||1)-1]})),[
+            {key:"cliente",label:"Cliente"},{key:"codigo_cliente",label:"Cód.Cliente"},{key:"codigo_producto",label:"Cód.Producto"},
+            {key:"denominacion",label:"Producto"},{key:"unidades",label:"Unidades"},{key:"precio_unidad",label:"Precio Unidad"},
+            {key:"venta_neta",label:"Venta Neta"},{key:"mes_nombre",label:"Mes"},{key:"anio",label:"Año"},{key:"gestor",label:"Gestor"}
+          ]),"ventas.csv")}>⬇ CSV</Btn>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
+          {[
+            ["Venta neta total",`€${totalVenta.toLocaleString("es-ES",{minimumFractionDigits:2})}`, "#185fa5"],
+            ["Total unidades", totalUds.toLocaleString("es-ES"), "#1d9e75"],
+            ["Líneas", ventasFilt.length, "#7f77dd"]
+          ].map(([l,v,c])=>(
+            <div key={l} style={{ background:"#fff", border:"1px solid #e8e8e8", borderRadius:10, padding:"1rem", textAlign:"center" }}>
+              <div style={{ fontSize:12, color:"#888", marginBottom:4 }}>{l}</div>
+              <div style={{ fontSize:22, fontWeight:600, color:c }}>{v}</div>
+            </div>
+          ))}
+        </div>
+        <Card><VentasChart data={ventasChart} groupBy={ventasFiltro.groupBy} /></Card>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, background:"#fff", borderRadius:10 }}>
+            <thead style={{ background:"#f9f9f9" }}>
+              <tr>{["Cliente","Cód.Cliente","Producto","Uds","P.Unit","Venta Neta","Mes","Año","Gestor"].map(h=><th key={h} style={{ textAlign:"left", padding:"8px 10px", fontWeight:600, color:"#555", fontSize:12, borderBottom:"1px solid #eee", whiteSpace:"nowrap" }}>{h}</th>)}</tr>
+            </thead>
+            <tbody>{ventasFilt.map(v=>(
+              <tr key={v.id} style={{ borderBottom:"1px solid #f0f0f0" }}>
+                <td style={{ padding:"8px 10px", fontWeight:500 }}>{clientName(v.cliente_id)}</td>
+                <td style={{ padding:"8px 10px", fontSize:11, fontFamily:"monospace", color:"#185fa5" }}>{v.codigo_cliente}</td>
+                <td style={{ padding:"8px 10px", fontSize:12 }}>{v.denominacion}</td>
+                <td style={{ padding:"8px 10px", textAlign:"right", fontSize:12 }}>{v.unidades}</td>
+                <td style={{ padding:"8px 10px", textAlign:"right", fontSize:12 }}>€{parseFloat(v.precio_unidad||0).toFixed(2)}</td>
+                <td style={{ padding:"8px 10px", textAlign:"right", fontWeight:600, color:"#1d9e75" }}>€{parseFloat(v.venta_neta||0).toLocaleString("es-ES",{minimumFractionDigits:2})}</td>
+                <td style={{ padding:"8px 10px", fontSize:12 }}>{MESES[(v.mes||1)-1]}</td>
+                <td style={{ padding:"8px 10px", fontSize:12 }}>{v.anio}</td>
+                <td style={{ padding:"8px 10px", fontSize:12 }}>{v.gestor}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {ventasFilt.length===0 && <div style={{ textAlign:"center", color:"#aaa", marginTop:24, fontSize:13 }}>Sin datos de ventas.</div>}
+        </div>
+      </>}
     </div>;
   }
 
   function TabInformes() {
-    const fc = clients.filter(c =>
-      (!rptFilter.canal || c.canal === rptFilter.canal) &&
-      (!rptFilter.grupo || c.grupo === rptFilter.grupo) &&
-      (!rptFilter.gestor || c.gestor === rptFilter.gestor)
-    );
-    const rows = fc.map(c => {
-      const cActs = activities.filter(a => a.cliente_id === c.id && (!rptFilter.fechaDesde || a.fecha >= rptFilter.fechaDesde) && (!rptFilter.fechaHasta || a.fecha <= rptFilter.fechaHasta));
-      const cTasks = tasks.filter(t => t.cliente_id === c.id && (!rptFilter.estado || t.estado === rptFilter.estado));
-      return { ...c, numActs: cActs.length, numTasks: cTasks.length, ultima: cActs.length ? cActs[0].fecha : "—", tasksPend: tasks.filter(t => t.cliente_id === c.id && t.estado !== "Completada").length };
+    const [rptFilter, setRptFilter] = useState({ canal:"", grupo:"", gestor:"", fechaDesde:"", fechaHasta:"", estado:"" });
+    const fc = clients.filter(c=>(!rptFilter.canal||c.canal===rptFilter.canal)&&(!rptFilter.grupo||c.grupo===rptFilter.grupo)&&(!rptFilter.gestor||c.gestor===rptFilter.gestor));
+    const rows = fc.map(c=>{
+      const cActs=activities.filter(a=>a.cliente_id===c.id&&(!rptFilter.fechaDesde||a.fecha>=rptFilter.fechaDesde)&&(!rptFilter.fechaHasta||a.fecha<=rptFilter.fechaHasta));
+      const cActsFilt=cActs.filter(a=>!rptFilter.estado||a.estado===rptFilter.estado);
+      const ultima=cActs.length?cActs[0].fecha:"—";
+      const ventaCliente=ventas.filter(v=>v.cliente_id===c.id).reduce((s,v)=>s+(v.venta_neta||0),0);
+      return {...c, numActs:cActs.length, numActsFilt:cActsFilt.length, ultima, actsPend:activities.filter(a=>a.cliente_id===c.id&&a.estado!=="Completada").length, ventaTotal:ventaCliente};
     });
     return <div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "flex-end" }}>
-        {[["Canal", "canal", config.canales], ["Grupo", "grupo", config.grupos], ["Gestor", "gestor", config.gestores], ["Estado tarea", "estado", ESTADOS_TAREA]].map(([l, k, opts]) => (
-          <div key={k} style={{ flex: "1 1 120px" }}>
-            <div style={{ fontSize: 11, color: "#888", marginBottom: 3 }}>{l}</div>
-            <Sel value={rptFilter[k]} onChange={v => setRptFilter(f => ({ ...f, [k]: v }))} options={opts} placeholder="Todos" />
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:16, alignItems:"flex-end" }}>
+        {[["Canal","canal",config.canales],["Grupo","grupo",config.grupos],["Gestor","gestor",config.gestores],["Estado activ.","estado",ESTADOS_ACT]].map(([l,k,opts])=>(
+          <div key={k} style={{ flex:"1 1 120px" }}>
+            <div style={{ fontSize:11, color:"#888", marginBottom:3 }}>{l}</div>
+            <Sel value={rptFilter[k]} onChange={v=>setRptFilter(f=>({...f,[k]:v}))} options={opts} placeholder="Todos" />
           </div>
         ))}
-        {[["fechaDesde", "Activ. desde"], ["fechaHasta", "Activ. hasta"]].map(([k, l]) => (
-          <div key={k} style={{ flex: "1 1 120px" }}>
-            <div style={{ fontSize: 11, color: "#888", marginBottom: 3 }}>{l}</div>
-            <Inp type="date" value={rptFilter[k]} onChange={v => setRptFilter(f => ({ ...f, [k]: v }))} />
+        {[["fechaDesde","Activ. desde"],["fechaHasta","Activ. hasta"]].map(([k,l])=>(
+          <div key={k} style={{ flex:"1 1 120px" }}>
+            <div style={{ fontSize:11, color:"#888", marginBottom:3 }}>{l}</div>
+            <Inp type="date" value={rptFilter[k]} onChange={v=>setRptFilter(f=>({...f,[k]:v}))} />
           </div>
         ))}
-        <Btn onClick={() => setRptFilter({ canal: "", grupo: "", gestor: "", fechaDesde: "", fechaHasta: "", estado: "" })}>Limpiar</Btn>
-        <Btn variant="success" onClick={() => downloadCSV(toCSV(rows, [
-          { key: "nombre", label: "Empresa" }, { key: "nif", label: "NIF" }, { key: "ciudad", label: "Ciudad" },
-          { key: "canal", label: "Canal" }, { key: "grupo", label: "Grupo" }, { key: "gestor", label: "Gestor" },
-          { key: "numActs", label: "Actividades" }, { key: "numTasks", label: "Tareas" }, { key: "tasksPend", label: "Pendientes" }, { key: "ultima", label: "Última actividad" }
-        ]), "informe.csv")}>⬇ CSV</Btn>
+        <Btn onClick={()=>setRptFilter({canal:"",grupo:"",gestor:"",fechaDesde:"",fechaHasta:"",estado:""})}>Limpiar</Btn>
+        <Btn variant="success" onClick={()=>downloadCSV(toCSV(rows,[
+          {key:"codigo",label:"Código"},{key:"nombre",label:"Empresa"},{key:"nif",label:"NIF"},{key:"ciudad",label:"Ciudad"},
+          {key:"tipo_cliente",label:"Tipo"},{key:"canal",label:"Canal"},{key:"grupo",label:"Grupo"},{key:"gestor",label:"Gestor"},
+          {key:"numActs",label:"Actividades"},{key:"actsPend",label:"Pendientes"},{key:"ultima",label:"Última activ."},
+          {key:"ventaTotal",label:"Venta Total €"}
+        ]),"informe.csv")}>⬇ CSV</Btn>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
-        {[["Clientes", rows.length, "#185fa5"], ["Actividades", rows.reduce((s, r) => s + r.numActs, 0), "#1d9e75"], ["Tareas", rows.reduce((s, r) => s + r.numTasks, 0), "#7f77dd"], ["Pendientes", rows.reduce((s, r) => s + r.tasksPend, 0), "#ba7517"]].map(([l, v, c]) => (
-          <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "0.75rem 1rem" }}>
-            <div style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>{l}</div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: c }}>{v}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
+        {[["Clientes",rows.length,"#185fa5"],["Actividades",rows.reduce((s,r)=>s+r.numActs,0),"#1d9e75"],["Pendientes",rows.reduce((s,r)=>s+r.actsPend,0),"#ba7517"],["Venta Total",`€${rows.reduce((s,r)=>s+r.ventaTotal,0).toLocaleString("es-ES",{minimumFractionDigits:2})}`,"#7f77dd"]].map(([l,v,c])=>(
+          <div key={l} style={{ background:"#fff", border:"1px solid #e8e8e8", borderRadius:8, padding:"0.75rem 1rem" }}>
+            <div style={{ fontSize:11, color:"#888", marginBottom:2 }}>{l}</div>
+            <div style={{ fontSize:typeof v==="string"&&v.startsWith("€")?16:22, fontWeight:600, color:c }}>{v}</div>
           </div>
         ))}
       </div>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
-          <thead style={{ background: "#f9f9f9" }}>
-            <tr>{["Empresa", "NIF", "Canal", "Grupo", "Gestor", "Actividades", "Tareas", "Pend.", "Última activ."].map(h => (
-              <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>{h}</th>
-            ))}</tr>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13, background:"#fff", borderRadius:10 }}>
+          <thead style={{ background:"#f9f9f9" }}>
+            <tr>{["Código","Empresa","Tipo","Canal","Gestor","Actividades","Pendientes","Última activ.","Venta Total"].map(h=><th key={h} style={{ textAlign:"left", padding:"8px 10px", fontWeight:600, color:"#555", fontSize:12, borderBottom:"1px solid #eee", whiteSpace:"nowrap" }}>{h}</th>)}</tr>
           </thead>
-          <tbody>{rows.map(r => (
-            <tr key={r.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
-              <td style={{ padding: "9px 10px", fontWeight: 500 }}>{r.nombre}</td>
-              <td style={{ padding: "9px 10px", fontSize: 12, color: "#888" }}>{r.nif}</td>
-              <td style={{ padding: "9px 10px" }}><Badge color="#7f77dd" label={r.canal || "—"} /></td>
-              <td style={{ padding: "9px 10px" }}><Badge color="#1d9e75" label={r.grupo || "—"} /></td>
-              <td style={{ padding: "9px 10px", fontSize: 12 }}>{r.gestor}</td>
-              <td style={{ padding: "9px 10px", textAlign: "center", color: r.numActs > 0 ? "#1d9e75" : "#aaa", fontWeight: 600 }}>{r.numActs}</td>
-              <td style={{ padding: "9px 10px", textAlign: "center" }}>{r.numTasks}</td>
-              <td style={{ padding: "9px 10px", textAlign: "center", color: r.tasksPend > 0 ? "#ba7517" : "#aaa", fontWeight: 600 }}>{r.tasksPend}</td>
-              <td style={{ padding: "9px 10px", fontSize: 12 }}>{r.ultima}</td>
+          <tbody>{rows.map(r=>(
+            <tr key={r.id} style={{ borderBottom:"1px solid #f0f0f0" }}>
+              <td style={{ padding:"9px 10px", fontSize:11, fontFamily:"monospace", color:"#185fa5", fontWeight:600 }}>{r.codigo||"—"}</td>
+              <td style={{ padding:"9px 10px", fontWeight:500 }}>{r.nombre}</td>
+              <td style={{ padding:"9px 10px" }}><Badge color={r.tipo_cliente==="Cliente"?"#1d9e75":"#ba7517"} label={r.tipo_cliente||"Potencial"} /></td>
+              <td style={{ padding:"9px 10px" }}><Badge color="#7f77dd" label={r.canal||"—"} /></td>
+              <td style={{ padding:"9px 10px", fontSize:12 }}>{r.gestor}</td>
+              <td style={{ padding:"9px 10px", textAlign:"center", color:r.numActs>0?"#1d9e75":"#aaa", fontWeight:600 }}>{r.numActs}</td>
+              <td style={{ padding:"9px 10px", textAlign:"center", color:r.actsPend>0?"#ba7517":"#aaa", fontWeight:600 }}>{r.actsPend}</td>
+              <td style={{ padding:"9px 10px", fontSize:12 }}>{r.ultima}</td>
+              <td style={{ padding:"9px 10px", textAlign:"right", fontWeight:600, color:"#1d9e75" }}>€{r.ventaTotal.toLocaleString("es-ES",{minimumFractionDigits:2})}</td>
             </tr>
           ))}</tbody>
         </table>
-        {rows.length === 0 && <div style={{ textAlign: "center", color: "#aaa", marginTop: 24, fontSize: 13 }}>Sin resultados.</div>}
+        {rows.length===0 && <div style={{ textAlign:"center", color:"#aaa", marginTop:24, fontSize:13 }}>Sin resultados.</div>}
       </div>
     </div>;
   }
 
   function TabConfiguracion() {
-    const sections = [["Canales", "canal", "canales", "#7f77dd"], ["Grupos gestores", "grupo", "grupos", "#1d9e75"], ["Gestores", "gestor", "gestores", "#378add"]];
+    const sections=[["Canales","canal","canales","#7f77dd"],["Grupos gestores","grupo","grupos","#1d9e75"],["Gestores","gestor","gestores","#378add"]];
     return <div>
-      {currentUser.admin && <><AdminPanel /><Sep label="Listas de configuración" /></>}
-      {sections.map(([label, ckey, k, color]) => (
-        <div key={ckey} style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>{label}</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            <Inp value={newVal[ckey]} onChange={v => setNewVal(n => ({ ...n, [ckey]: v }))} placeholder="Nuevo..." />
-            <Btn variant="primary" onClick={async () => {
-              const v = newVal[ckey].trim();
-              if (!v || config[k].includes(v)) return;
-              await saveConfig(k, [...config[k], v]);
-              setNewVal(n => ({ ...n, [ckey]: "" }));
-            }}>Añadir</Btn>
+      {currentUser.admin && <><AdminPanel /><NotifConfig tasks={activities} activities={activities} clients={clients} currentUser={currentUser} /><Sep label="Listas de configuración" /></>}
+      {sections.map(([label,ckey,k,color])=>(
+        <div key={ckey} style={{ marginBottom:24 }}>
+          <div style={{ fontSize:13, fontWeight:600, marginBottom:10 }}>{label}</div>
+          <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+            <Inp value={newVal[ckey]} onChange={v=>setNewVal(n=>({...n,[ckey]:v}))} placeholder="Nuevo..." />
+            <Btn variant="primary" onClick={async()=>{ const v=newVal[ckey].trim(); if(!v||config[k].includes(v))return; await saveConfig(k,[...config[k],v]); setNewVal(n=>({...n,[ckey]:""})); }}>Añadir</Btn>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {config[k].map(v => (
-              <span key={v} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 16, background: color + "18", border: "1px solid " + color + "44", fontSize: 13 }}>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+            {config[k].map(v=>(
+              <span key={v} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 12px", borderRadius:16, background:color+"18", border:`1px solid ${color}44`, fontSize:13 }}>
                 <span style={{ color }}>{v}</span>
-                <button onClick={async () => await saveConfig(k, config[k].filter(x => x !== v))}
-                  style={{ background: "none", border: "none", cursor: "pointer", color, fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
+                <button onClick={async()=>await saveConfig(k,config[k].filter(x=>x!==v))} style={{ background:"none", border:"none", cursor:"pointer", color, fontSize:16, lineHeight:1, padding:0 }}>×</button>
               </span>
             ))}
           </div>
@@ -1035,40 +1116,35 @@ function CRM() {
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem", padding: "1rem 1.25rem", borderRadius: 12, background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", overflow: "hidden", border: "2px solid rgba(255,255,255,0.6)", flexShrink: 0 }}>
-            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.5rem", padding:"1rem 1.25rem", borderRadius:12, background:"linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <div style={{ width:64, height:64, borderRadius:"50%", overflow:"hidden", border:"2px solid rgba(255,255,255,0.6)", flexShrink:0 }}>
+            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center" }} />
           </div>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.15)" }}>CRM Panificadora La Sin Gluten</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 2 }}>Gestión de clientes B2B</div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#fff", textShadow:"0 1px 2px rgba(0,0,0,0.15)" }}>CRM Panificadora La Sin Gluten</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.85)", marginTop:2 }}>Gestión de clientes B2B</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", background: "rgba(255,255,255,0.15)", padding: "4px 12px", borderRadius: 20 }}>
-            👤 {currentUser.nombre}{currentUser.admin ? " ⭐" : ""}
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.9)", background:"rgba(255,255,255,0.15)", padding:"4px 12px", borderRadius:20 }}>👤 {currentUser.nombre}{currentUser.admin?" ⭐":""}</div>
+          <div style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(255,255,255,0.2)", padding:"5px 12px", borderRadius:20 }}>
+            <div style={{ width:8, height:8, borderRadius:"50%", background:loading?"#ffd700":error?"#ff6b6b":"#90ee90" }} />
+            <span style={{ fontSize:12, color:"#fff" }}>{loading?"Conectando…":error?"Sin conexión":"Conectado"}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.2)", padding: "5px 12px", borderRadius: 20 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? "#ffd700" : error ? "#ff6b6b" : "#90ee90" }} />
-            <span style={{ fontSize: 12, color: "#fff" }}>{loading ? "Conectando…" : error ? "Sin conexión" : "Conectado"}</span>
-          </div>
-          <Btn onClick={handleLogout} style={{ fontSize: 12, padding: "5px 12px", background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }}>Salir</Btn>
+          <Btn onClick={handleLogout} style={{ fontSize:12, padding:"5px 12px", background:"rgba(255,255,255,0.2)", border:"1px solid rgba(255,255,255,0.3)", color:"#fff" }}>Salir</Btn>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 2, marginBottom: 24, borderBottom: "1px solid #e8e8e8", overflowX: "auto" }}>
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "8px 16px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: tab === t ? 600 : 400, color: tab === t ? "#185fa5" : "#666", borderBottom: tab === t ? "2px solid #185fa5" : "2px solid transparent", marginBottom: -1, whiteSpace: "nowrap" }}>{t}</button>
-        ))}
+      <div style={{ display:"flex", gap:2, marginBottom:24, borderBottom:"1px solid #e8e8e8", overflowX:"auto" }}>
+        {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{ padding:"8px 16px", background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:tab===t?600:400, color:tab===t?"#185fa5":"#666", borderBottom:tab===t?"2px solid #185fa5":"2px solid transparent", marginBottom:-1, whiteSpace:"nowrap" }}>{t}</button>)}
       </div>
-      {loading ? <Spinner /> : error ? <ErrMsg msg={error} onRetry={loadAll} /> : <>
-        {tab === "Dashboard"     && <Dashboard />}
-        {tab === "Clientes"      && <TabClientes />}
-        {tab === "Actividades"   && <TabActividades />}
-        {tab === "Tareas"        && <TabTareas />}
-        {tab === "Informes"      && <TabInformes />}
-        {tab === "Configuración" && <TabConfiguracion />}
+      {loading?<Spinner/>:error?<ErrMsg msg={error} onRetry={loadAll}/>:<>
+        {tab==="Dashboard"     && <Dashboard />}
+        {tab==="Clientes"      && <TabClientes />}
+        {tab==="Actividades"   && <TabActividades />}
+        {tab==="Ventas"        && <TabVentas />}
+        {tab==="Informes"      && <TabInformes />}
+        {tab==="Configuración" && <TabConfiguracion />}
       </>}
     </div>
   );
