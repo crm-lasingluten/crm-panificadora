@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -417,6 +417,12 @@ function ClienteForm({ initial, config, clients, onSave, onCancel, saving, curre
         <FL label="Grupo" flex={1}><Sel value={form.grupo} onChange={v => set("grupo", v)} options={config.grupos} placeholder="Seleccionar" /></FL>
         <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={v => set("gestor", v)} options={config.gestores} placeholder="Seleccionar" /></FL>
       </FRow>
+      <Sep label="Comentarios" />
+      <FRow>
+        <FL label="Comentarios del cliente" flex={1}>
+          <Textarea value={form.comentarios || ""} onChange={v => set("comentarios", v)} placeholder="Notas internas, observaciones, características del cliente…" rows={3} />
+        </FL>
+      </FRow>
       <Btn variant="primary" onClick={handleSave} disabled={saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
     </Card>
   );
@@ -504,6 +510,12 @@ function DetalleCliente({ cliente, activities, onClose }) {
         <div><span style={{ fontSize: 11, color: "#888" }}>Contacto: </span>{cliente.contacto || "—"}</div>
         <div style={{ gridColumn: "1/-1" }}><span style={{ fontSize: 11, color: "#888" }}>Dirección: </span>{dir || "—"}</div>
       </div>
+      {cliente.comentarios && (
+        <div style={{ marginBottom: 14, padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 13, color: "#555" }}>
+          <span style={{ fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>💬 Comentarios:</span>
+          {cliente.comentarios}
+        </div>
+      )}
       <Sep label={`Historial de actividades (${cActs.length})`} />
       {cActs.length === 0 ? <div style={{ fontSize: 12, color: "#888" }}>Sin actividades registradas.</div> :
         cActs.map(a => (
@@ -794,7 +806,7 @@ function CRM() {
   async function saveClient(form) {
     setSaving(true);
     try {
-      const body = { nombre: form.nombre, nif: form.nif, calle: form.calle, numero: form.numero, cp: form.cp, ciudad: form.ciudad, pais: form.pais, telefono: form.telefono, email: form.email, contacto: form.contacto, canal: form.canal, grupo: form.grupo, gestor: form.gestor, tipo_cliente: form.tipo_cliente || "Potencial" };
+      const body = { nombre: form.nombre, nif: form.nif, calle: form.calle, numero: form.numero, cp: form.cp, ciudad: form.ciudad, pais: form.pais, telefono: form.telefono, email: form.email, contacto: form.contacto, canal: form.canal, grupo: form.grupo, gestor: form.gestor, tipo_cliente: form.tipo_cliente || "Potencial", comentarios: form.comentarios || "" };
       if (form.id) { await sbPatch("clientes", form.id, body); }
       else {
         const allCodes = clients.map(c => c.codigo).filter(Boolean);
@@ -925,6 +937,29 @@ function CRM() {
           <Sel value={filter.gestor} onChange={v=>setFilter(f=>({...f,gestor:v}))} options={config.gestores} placeholder="Gestor" />
           <Btn onClick={()=>setFilter({canal:"",grupo:"",gestor:"",tipo_cliente:""})}>Limpiar</Btn>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
+            <Btn variant="success" onClick={() => {
+              const ws = XLSX.utils.json_to_sheet(filteredClients.map(c => ({
+                "Código": c.codigo || "",
+                "Nombre empresa": c.nombre || "",
+                "NIF": c.nif || "",
+                "Tipo": c.tipo_cliente || "",
+                "Calle": c.calle || "",
+                "Número": c.numero || "",
+                "CP": c.cp || "",
+                "Ciudad": c.ciudad || "",
+                "País": c.pais || "",
+                "Teléfono": c.telefono || "",
+                "Email": c.email || "",
+                "Contacto": c.contacto || "",
+                "Canal": c.canal || "",
+                "Grupo": c.grupo || "",
+                "Gestor": c.gestor || "",
+                "Comentarios": c.comentarios || "",
+              })));
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+              XLSX.writeFile(wb, `clientes_${new Date().toISOString().slice(0,10)}.xlsx`);
+            }}>⬇ Excel</Btn>
             <Btn variant="warning" onClick={()=>{setDetalleId(null);setClientPanel(null);setShowImportCli(true);}}>📥 Importar</Btn>
             <Btn variant="primary" onClick={()=>{setDetalleId(null);setShowImportCli(false);setClientPanel("new");}}>+ Nuevo</Btn>
           </div>
