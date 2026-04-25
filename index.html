@@ -581,7 +581,6 @@ function ImportExcel({ config, clients, onImport, onClose, lineaActiva }) {
         const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
         const mapped = rows.map(r => {
           const keys = Object.keys(r);
-          // Búsqueda flexible por nombre de columna o posición
           const get = (idx, names) => {
             for (const n of names) {
               const k = keys.find(k => k.toLowerCase().replace(/\s+/g,"").includes(n.toLowerCase().replace(/\s+/g,"")));
@@ -589,24 +588,17 @@ function ImportExcel({ config, clients, onImport, onClose, lineaActiva }) {
             }
             return String(r[keys[idx]] || "").trim();
           };
-
-          // Detectar línea de negocio — puede estar en col 15 o en comentarios
           const lineaRaw = get(15, ["linea","línea","line"]);
-          const linea = LINEAS.includes(lineaRaw) ? lineaRaw : lineaActiva;
-
-          // Canal — si dice FABRICANTE u otro valor no válido, dejarlo como viene o vacío
+          const linea = ["La Sin Gluten","Bauer Lemans"].includes(lineaRaw) ? lineaRaw : lineaActiva;
           const canalRaw = get(10, ["canal"]);
-
-          // Comentarios — col 14
           const comentRaw = get(14, ["comentarios","comentario","notas","observaciones"]);
-
           return {
-            nombre:        get(0,  ["nombre empresa","nombre","empresa","company"]),
+            nombre:        get(0,  ["nombre empresa","nombre","empresa"]),
             nif:           get(1,  ["nif","cif","vat"]) || "",
-            calle:         get(2,  ["calle","street","direccion","dirección"]),
-            numero:        get(3,  ["numero","número","num","nº"]),
+            calle:         get(2,  ["calle","street","direccion"]),
+            numero:        get(3,  ["numero","número","num"]),
             cp:            get(4,  ["cp","código postal","codigo postal","postal"]),
-            ciudad:        get(5,  ["ciudad","city","poblacion","población"]),
+            ciudad:        get(5,  ["ciudad","city"]),
             pais:          get(6,  ["pais","país","country"]) || "España",
             telefono:      get(7,  ["telefono","teléfono","phone","tel"]),
             email:         get(8,  ["email","mail","correo"]),
