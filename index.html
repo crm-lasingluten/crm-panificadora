@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -24,6 +24,14 @@
 </head>
 <body>
 <div id="root"></div>
+<div id="error-display" style="display:none;padding:2rem;background:#fef2f2;color:#b91c1c;font-family:monospace;font-size:13px;white-space:pre-wrap;border:1px solid #fca5a5;margin:1rem;border-radius:8px;"></div>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var d = document.getElementById('error-display');
+  d.style.display = 'block';
+  d.textContent = '❌ Error en línea ' + line + ':\n' + msg + '\n\nArchivo: ' + src;
+};
+</script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
@@ -33,8 +41,8 @@ const H = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization
 const EJS_SERVICE = "service_23nxndb", EJS_TEMPLATE = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
 
 const LINEAS = ["La Sin Gluten", "Bauer Lemans"];
-const LINEA_COLORS = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#7f77dd" };
-const LINEA_LOGOS = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" };
+const LINEA_COLORS = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
+const LINEA_LOGOS = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
 
 async function sbGet(table, params = "") {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: H });
@@ -581,8 +589,35 @@ function ImportExcel({ config, clients, onImport, onClose, lineaActiva }) {
         const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
         const mapped = rows.map(r => {
           const keys = Object.keys(r);
-          const get = (idx, names) => { for (const n of names) { const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase())); if (k !== undefined) return String(r[k] || "").trim(); } return String(r[keys[idx]] || "").trim(); };
-          return { nombre: get(0,["nombre","empresa"]), nif: get(1,["nif","cif"]), calle: get(2,["calle"]), numero: get(3,["numero","número"]), cp: get(4,["cp","postal"]), ciudad: get(5,["ciudad"]), pais: get(6,["pais","país"]) || "España", telefono: get(7,["telefono","teléfono"]), email: get(8,["email","mail"]), contacto: get(9,["contacto"]), canal: get(10,["canal"]), grupo: get(11,["grupo"]), gestor: get(12,["gestor"]), tipo_cliente: get(13,["tipo"]) || "Potencial", comentarios: get(14,["comentarios","comentario","notas"]), linea_negocio: get(15,["linea","línea"]) || lineaActiva };
+          const get = (idx, names) => {
+            for (const n of names) {
+              const k = keys.find(k => k.toLowerCase().replace(/\s+/g,"").includes(n.toLowerCase().replace(/\s+/g,"")));
+              if (k !== undefined && r[k] !== undefined && String(r[k]).trim() !== "") return String(r[k] || "").trim();
+            }
+            return String(r[keys[idx]] || "").trim();
+          };
+          const lineaRaw = get(15, ["linea","línea","line"]);
+          const linea = ["La Sin Gluten","Bauer Lemans"].includes(lineaRaw) ? lineaRaw : lineaActiva;
+          const canalRaw = get(10, ["canal"]);
+          const comentRaw = get(14, ["comentarios","comentario","notas","observaciones"]);
+          return {
+            nombre:        get(0,  ["nombre empresa","nombre","empresa"]),
+            nif:           get(1,  ["nif","cif","vat"]) || "",
+            calle:         get(2,  ["calle","street","direccion"]),
+            numero:        get(3,  ["numero","número","num"]),
+            cp:            get(4,  ["cp","código postal","codigo postal","postal"]),
+            ciudad:        get(5,  ["ciudad","city"]),
+            pais:          get(6,  ["pais","país","country"]) || "España",
+            telefono:      get(7,  ["telefono","teléfono","phone","tel"]),
+            email:         get(8,  ["email","mail","correo"]),
+            contacto:      get(9,  ["contacto","contact","persona"]),
+            canal:         canalRaw,
+            grupo:         get(11, ["grupo","group"]),
+            gestor:        get(12, ["gestor","manager"]),
+            tipo_cliente:  get(13, ["tipo"]) || "Potencial",
+            comentarios:   comentRaw,
+            linea_negocio: linea,
+          };
         }).filter(r => r.nombre);
         setPreview(mapped); setResult(null);
       } catch (err) { alert("Error: " + err.message); }
@@ -592,12 +627,40 @@ function ImportExcel({ config, clients, onImport, onClose, lineaActiva }) {
   async function handleImport() {
     if (!preview?.length) return;
     setImporting(true);
-    let ok = 0, skip = 0, err = 0;
+    let ok = 0, skip = 0, err = 0, errores = [];
     for (const row of preview) {
-      const existe = clients.some(c => (row.nif && normalize(c.nif) === normalize(row.nif)) || normalize(c.nombre) === normalize(row.nombre));
+      // Solo comparar por nombre para evitar duplicados
+      const existe = clients.some(c => normalize(c.nombre) === normalize(row.nombre));
       if (existe) { skip++; continue; }
-      try { await sbPost("clientes", row); ok++; } catch { err++; }
+      try {
+        await sbPost("clientes", {
+          nombre:        row.nombre || "",
+          nif:           row.nif || null,
+          calle:         row.calle || null,
+          numero:        row.numero || null,
+          cp:            row.cp || null,
+          ciudad:        row.ciudad || null,
+          pais:          row.pais || "España",
+          telefono:      row.telefono || null,
+          email:         row.email || null,
+          contacto:      row.contacto || null,
+          canal:         row.canal || null,
+          grupo:         row.grupo || null,
+          gestor:        row.gestor || null,
+          tipo_cliente:  row.tipo_cliente || "Potencial",
+          comentarios:   row.comentarios || null,
+          linea_negocio: row.linea_negocio || lineaActiva,
+        });
+        ok++;
+      } catch(e) {
+        err++;
+        errores.push(`${row.nombre}: ${e.message}`);
+      }
     }
+    setImporting(false);
+    setResult({ ok, skip, err, errores });
+    if (ok > 0) onImport();
+  }
     setImporting(false); setResult({ ok, skip, err });
     if (ok > 0) onImport();
   }
@@ -637,7 +700,14 @@ function ImportExcel({ config, clients, onImport, onClose, lineaActiva }) {
               </tr>)}</tbody>
             </table>
           </div>
-          {result ? <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos · <strong>{result.err}</strong> errores</div>
+          {result ? <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>
+            ✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos (ya existían) · <strong>{result.err}</strong> errores
+            {result.errores?.length > 0 && (
+              <div style={{ marginTop: 8, maxHeight: 120, overflowY: "auto", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 10px" }}>
+                {result.errores.map((e, i) => <div key={i} style={{ fontSize: 11, color: "#b91c1c", marginBottom: 2 }}>⚠️ {e}</div>)}
+              </div>
+            )}
+          </div>
           : <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>{importing ? "Importando…" : `Importar ${preview.length} clientes`}</Btn>}
         </div>
       )}
@@ -899,7 +969,7 @@ function CRM() {
 
   const linColor = LINEA_COLORS[lineaActiva] || "#5bb5bc";
   const linGrad  = lineaActiva === "Bauer Lemans"
-    ? "linear-gradient(135deg, #7f77dd 0%, #5a52b8 100%)"
+    ? "linear-gradient(135deg, #c0392b 0%, #922b21 100%)"
     : "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)";
 
   // ── TABS ──────────────────────────────────────────────────────────────────
@@ -1197,7 +1267,7 @@ function CRM() {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",padding:"1rem 1.25rem",borderRadius:12,background:linGrad}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:64,height:64,borderRadius:"50%",overflow:"hidden",border:"2px solid rgba(255,255,255,0.6)",flexShrink:0}}>
-            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}} />
+            <img src={LINEA_LOGOS[lineaActiva]} alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}} />
           </div>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>CRM — {lineaActiva}</div>
@@ -1242,4 +1312,4 @@ function CRM() {
 ReactDOM.createRoot(document.getElementById("root")).render(<CRM />);
 </script>
 </body>
-</html>
+</html> 
