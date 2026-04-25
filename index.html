@@ -24,6 +24,14 @@
 </head>
 <body>
 <div id="root"></div>
+<div id="error-display" style="display:none;padding:2rem;background:#fef2f2;color:#b91c1c;font-family:monospace;font-size:13px;white-space:pre-wrap;border:1px solid #fca5a5;margin:1rem;border-radius:8px;"></div>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var d = document.getElementById('error-display');
+  d.style.display = 'block';
+  d.textContent = '❌ Error en línea ' + line + ':\n' + msg + '\n\nArchivo: ' + src;
+};
+</script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
