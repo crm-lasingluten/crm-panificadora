@@ -24,332 +24,347 @@
 </head>
 <body>
 <div id="root"></div>
+<div id="err-box" style="display:none;padding:2rem;background:#fef2f2;color:#b91c1c;font-family:monospace;font-size:13px;white-space:pre-wrap;border:1px solid #fca5a5;margin:1rem;border-radius:8px;"></div>
+<script>
+window.onerror = function(msg, src, line) {
+  var d = document.getElementById("err-box");
+  d.style.display = "block";
+  d.textContent = "Error linea " + line + ": " + msg + "\nArchivo: " + src;
+};
+</script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
-const H = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}`, "Prefer": "return=representation" };
-const EJS_SERVICE = "service_23nxndb", EJS_TEMPLATE = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
+const HDR = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Prefer": "return=representation" };
+const EJS_SVC = "service_23nxndb", EJS_TPL = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
 
 const LINEAS = ["La Sin Gluten", "Bauer Lemans"];
-const LINEA_COLORS = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
-const LINEA_LOGOS = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
+const LINEA_COLOR = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
+const LINEA_GRAD  = { "La Sin Gluten": "linear-gradient(135deg,#8ecfd4,#5bb5bc)", "Bauer Lemans": "linear-gradient(135deg,#c0392b,#922b21)" };
+const LINEA_LOGO  = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
 
-async function sbGet(table, params = "") {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { headers: H });
-  if (!r.ok) throw new Error(await r.text());
+const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota"];
+const PRIORIDADES = ["Alta","Media","Baja"];
+const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
+const TIPOS_CLI   = ["Potencial","Cliente","Inactivo"];
+const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Informes","Configuración"];
+const MESES       = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const CY = new Date().getFullYear();
+const CM = new Date().getMonth() + 1;
+const ANIOS = [String(CY-2), String(CY-1), String(CY), String(CY+1), String(CY+2)];
+const POR_PAGINA = 50;
+
+const PRIO_C = { Alta:"#e24b4a", Media:"#ba7517", Baja:"#1d9e75" };
+const EST_C  = { Pendiente:"#378add", "En curso":"#ba7517", Completada:"#1d9e75" };
+const TIPO_C = { Llamada:"#7f77dd", Email:"#378add", Reunión:"#1d9e75", Visita:"#e24b4a", WhatsApp:"#25d366", Nota:"#888780" };
+const TCLI_C = { Cliente:"#1d9e75", Potencial:"#ba7517", Inactivo:"#888" };
+
+function norm(s) { return (s||"").trim().toLowerCase().replace(/\s+/g," "); }
+function tod()   { return new Date().toISOString().slice(0,10); }
+function ddiff(f){ return Math.ceil((new Date(f)-new Date(tod()))/86400000); }
+
+async function sbGet(t,p) {
+  p=p||"";
+  var r=await fetch(SB_URL+"/rest/v1/"+t+"?"+p,{headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function sbPost(table, body) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method: "POST", headers: H, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+async function sbPost(t,b) {
+  var r=await fetch(SB_URL+"/rest/v1/"+t,{method:"POST",headers:HDR,body:JSON.stringify(b)});
+  if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function sbPatch(table, id, body) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "PATCH", headers: H, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+async function sbPatch(t,id,b) {
+  var r=await fetch(SB_URL+"/rest/v1/"+t+"?id=eq."+id,{method:"PATCH",headers:HDR,body:JSON.stringify(b)});
+  if(!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function sbDelete(table, id) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, { method: "DELETE", headers: H });
-  if (!r.ok) throw new Error(await r.text());
+async function sbDel(t,id) {
+  var r=await fetch(SB_URL+"/rest/v1/"+t+"?id=eq."+id,{method:"DELETE",headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
 }
-async function sbDeleteWhere(table, params) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, { method: "DELETE", headers: H });
-  if (!r.ok) throw new Error(await r.text());
+async function sbDelWhere(t,p) {
+  var r=await fetch(SB_URL+"/rest/v1/"+t+"?"+p,{method:"DELETE",headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
 }
 
-const TIPOS = ["Llamada", "Email", "Reunión", "Visita", "WhatsApp", "Nota"];
-const PRIORIDADES = ["Alta", "Media", "Baja"];
-const ESTADOS_ACT = ["Pendiente", "En curso", "Completada"];
-const TIPOS_CLIENTE = ["Potencial", "Cliente", "Inactivo"];
-const TABS = ["Dashboard", "Clientes", "Actividades", "Ventas", "Informes", "Configuración"];
-const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-const currYear = new Date().getFullYear();
-const currMonth = new Date().getMonth() + 1;
-const ANIOS = Array.from({ length: 5 }, (_, i) => String(currYear - 2 + i));
-
-const prioColor   = { Alta: "#e24b4a", Media: "#ba7517", Baja: "#1d9e75" };
-const estadoColor = { Pendiente: "#378add", "En curso": "#ba7517", Completada: "#1d9e75" };
-const tipoColor   = { Llamada: "#7f77dd", Email: "#378add", Reunión: "#1d9e75", Visita: "#e24b4a", WhatsApp: "#25d366", Nota: "#888780" };
-const normalize   = s => s?.trim().toLowerCase().replace(/\s+/g, " ");
-const today = () => new Date().toISOString().slice(0, 10);
-const diffDays = f => Math.ceil((new Date(f) - new Date(today())) / 86400000);
-
-function toCSV(rows, cols) {
-  const h = cols.map(c => c.label).join(",");
-  const b = rows.map(r => cols.map(c => `"${(r[c.key] ?? "").toString().replace(/"/g, '""')}"`).join(",")).join("\n");
-  return h + "\n" + b;
+function toCSV(rows,cols) {
+  var h=cols.map(function(c){return c.label;}).join(",");
+  var b=rows.map(function(r){return cols.map(function(c){return '"'+String(r[c.key]||"").replace(/"/g,'""')+'"';}).join(",");}).join("\n");
+  return h+"\n"+b;
 }
-function downloadCSV(content, filename) {
-  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+function dlCSV(content,filename) {
+  var blob=new Blob(["\uFEFF"+content],{type:"text/csv;charset=utf-8;"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a"); a.href=url; a.download=filename; a.click();
   URL.revokeObjectURL(url);
 }
-
-// ── EmailJS ───────────────────────────────────────────────────────────────────
-async function sendNotifEmail(gestor, email, momento, resumen) {
-  try { await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, { gestor, email, momento, fecha: new Date().toLocaleDateString("es-ES"), resumen }, EJS_KEY); return true; }
-  catch (e) { console.error(e); return false; }
+function dlXLSX(data,sheetName,filename) {
+  var ws=XLSX.utils.json_to_sheet(data);
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  XLSX.writeFile(wb,filename);
 }
-function buildResumen(gestor, activities, clientName) {
-  const actsPend = activities.filter(a => a.gestor === gestor && a.estado !== "Completada");
-  const venc = actsPend.filter(a => diffDays(a.fecha) < 0);
-  const hoy  = actsPend.filter(a => diffDays(a.fecha) === 0);
-  const prox = actsPend.filter(a => diffDays(a.fecha) > 0 && diffDays(a.fecha) <= 3);
-  let txt = "";
-  if (venc.length) { txt += `🔴 VENCIDAS (${venc.length}):\n`; venc.forEach(a => txt += `  • ${a.titulo||a.nota?.slice(0,40)} — ${clientName(a.cliente_id)} — ${a.fecha}\n`); txt += "\n"; }
-  if (hoy.length)  { txt += `🟠 HOY (${hoy.length}):\n`;       hoy.forEach(a  => txt += `  • ${a.titulo||a.nota?.slice(0,40)} — ${clientName(a.cliente_id)}\n`);              txt += "\n"; }
-  if (prox.length) { txt += `🟡 PRÓXIMAS (${prox.length}):\n`; prox.forEach(a => txt += `  • ${a.titulo||a.nota?.slice(0,40)} — ${clientName(a.cliente_id)} — ${a.fecha}\n`); txt += "\n"; }
-  if (!txt) txt = "✅ ¡Todo al día!\n";
+
+async function sendEmail(gestor,email,momento,resumen) {
+  try { await emailjs.send(EJS_SVC,EJS_TPL,{gestor:gestor,email:email,momento:momento,fecha:new Date().toLocaleDateString("es-ES"),resumen:resumen},EJS_KEY); return true; }
+  catch(e) { return false; }
+}
+function buildResumen(gestor,activities,clientName) {
+  var pend=activities.filter(function(a){return a.gestor===gestor&&a.estado!=="Completada";});
+  var venc=pend.filter(function(a){return ddiff(a.fecha)<0;});
+  var hoy =pend.filter(function(a){return ddiff(a.fecha)===0;});
+  var prox=pend.filter(function(a){return ddiff(a.fecha)>0&&ddiff(a.fecha)<=3;});
+  var txt="";
+  if(venc.length){txt+="🔴 VENCIDAS ("+venc.length+"):\n"; venc.forEach(function(a){txt+="  • "+(a.titulo||(a.nota||"").slice(0,40))+" — "+clientName(a.cliente_id)+" — "+a.fecha+"\n";}); txt+="\n";}
+  if(hoy.length) {txt+="🟠 HOY ("   +hoy.length +"):\n"; hoy.forEach(function(a) {txt+="  • "+(a.titulo||(a.nota||"").slice(0,40))+" — "+clientName(a.cliente_id)+"\n";});              txt+="\n";}
+  if(prox.length){txt+="🟡 PRÓXIMAS ("+prox.length+"):\n"; prox.forEach(function(a){txt+="  • "+(a.titulo||(a.nota||"").slice(0,40))+" — "+clientName(a.cliente_id)+" — "+a.fecha+"\n";}); txt+="\n";}
+  if(!txt) txt="✅ ¡Todo al día!\n";
   return txt;
 }
 
 // ── UI ────────────────────────────────────────────────────────────────────────
-function Badge({ color, label }) {
-  return <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 10, background: color + "22", color, fontWeight: 500, whiteSpace: "nowrap" }}>{label}</span>;
+function Badge(props) {
+  return <span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:props.color+"22",color:props.color,fontWeight:500,whiteSpace:"nowrap"}}>{props.label}</span>;
 }
-function Inp({ value, onChange, placeholder, type = "text", error }) {
-  return <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-    style={{ padding: "7px 10px", border: `1px solid ${error ? "#e24b4a" : "#ddd"}`, borderRadius: 8, fontSize: 13, background: "#fff", color: "#1a1a1a", width: "100%" }} />;
+function Inp(props) {
+  return <input type={props.type||"text"} value={props.value} onChange={function(e){props.onChange(e.target.value);}} placeholder={props.placeholder}
+    style={{padding:"7px 10px",border:"1px solid "+(props.error?"#e24b4a":"#ddd"),borderRadius:8,fontSize:13,background:"#fff",color:"#1a1a1a",width:"100%"}} />;
 }
-function Textarea({ value, onChange, placeholder, rows = 4 }) {
-  return <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
-    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", color: "#1a1a1a", width: "100%", resize: "vertical", fontFamily: "inherit" }} />;
+function Textarea(props) {
+  return <textarea value={props.value} onChange={function(e){props.onChange(e.target.value);}} placeholder={props.placeholder} rows={props.rows||4}
+    style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",color:"#1a1a1a",width:"100%",resize:"vertical",fontFamily:"inherit"}} />;
 }
-function Sel({ value, onChange, options, placeholder }) {
-  return <select value={value} onChange={e => onChange(e.target.value)}
-    style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", color: "#1a1a1a", width: "100%" }}>
-    {placeholder && <option value="">{placeholder}</option>}
-    {options.map(o => <option key={o} value={o}>{o}</option>)}
+function Sel(props) {
+  return <select value={props.value} onChange={function(e){props.onChange(e.target.value);}}
+    style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",color:"#1a1a1a",width:"100%"}}>
+    {props.placeholder&&<option value="">{props.placeholder}</option>}
+    {(props.options||[]).map(function(o){return <option key={o} value={o}>{o}</option>;})}
   </select>;
 }
-function Btn({ onClick, children, variant = "default", style, disabled }) {
-  const bg  = { primary: "#185fa5", success: "#0f6e56", danger: "#a32d2d", warning: "#ba7517", default: "#fff" };
-  const col = { primary: "#fff", success: "#fff", danger: "#fff", warning: "#fff", default: "#333" };
-  return <button onClick={onClick} disabled={disabled}
-    style={{ cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1, borderRadius: 8, fontSize: 13, padding: "7px 14px", fontWeight: 500, border: "1px solid #ddd", background: bg[variant] || bg.default, color: col[variant] || col.default, ...style }}>
-    {children}
+function Btn(props) {
+  var BG={primary:"#185fa5",success:"#0f6e56",danger:"#a32d2d",warning:"#ba7517",default:"#fff"};
+  var CL={primary:"#fff",success:"#fff",danger:"#fff",warning:"#fff",default:"#333"};
+  var v=props.variant||"default";
+  return <button onClick={props.onClick} disabled={props.disabled}
+    style={Object.assign({cursor:props.disabled?"not-allowed":"pointer",opacity:props.disabled?0.5:1,borderRadius:8,fontSize:13,padding:"7px 14px",fontWeight:500,border:"1px solid #ddd",background:BG[v]||BG.default,color:CL[v]||CL.default},props.style||{})}>
+    {props.children}
   </button>;
 }
-function Sep({ label }) {
-  return <div style={{ fontSize: 11, fontWeight: 600, color: "#888", textTransform: "uppercase", letterSpacing: 0.6, margin: "14px 0 10px", paddingTop: 12, borderTop: "1px solid #eee" }}>{label}</div>;
-}
-function FL({ label, error, flex = 1, children }) {
-  return <div style={{ flex }}>
-    <div style={{ fontSize: 12, color: error ? "#e24b4a" : "#666", marginBottom: 3 }}>{label}</div>
-    {children}
-    {error && <div style={{ fontSize: 11, color: "#e24b4a", marginTop: 2 }}>{error}</div>}
-  </div>;
-}
-function FRow({ children }) { return <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>{children}</div>; }
-function Card({ children, style }) {
-  return <div style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 12, padding: "1.25rem", marginBottom: 20, ...style }}>{children}</div>;
-}
-function Spinner() {
-  return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "4rem", color: "#888", fontSize: 13, gap: 10 }}>
-    <div style={{ width: 20, height: 20, border: "2px solid #ddd", borderTopColor: "#185fa5", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-    Conectando…
-  </div>;
-}
-function ErrMsg({ msg, onRetry }) {
-  return <div style={{ padding: "1rem", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, color: "#b91c1c", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-    <span>⚠️ {msg}</span>{onRetry && <Btn onClick={onRetry}>Reintentar</Btn>}
+function Sep(props){return <div style={{fontSize:11,fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:0.6,margin:"14px 0 10px",paddingTop:12,borderTop:"1px solid #eee"}}>{props.label}</div>;}
+function FL(props){return <div style={{flex:props.flex||1}}><div style={{fontSize:12,color:props.error?"#e24b4a":"#666",marginBottom:3}}>{props.label}</div>{props.children}{props.error&&<div style={{fontSize:11,color:"#e24b4a",marginTop:2}}>{props.error}</div>}</div>;}
+function FRow(props){return <div style={{display:"flex",gap:10,marginBottom:10}}>{props.children}</div>;}
+function Card(props){return <div style={Object.assign({background:"#fff",border:"1px solid #e8e8e8",borderRadius:12,padding:"1.25rem",marginBottom:20},props.style||{})}>{props.children}</div>;}
+function Spinner(){return <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"4rem",color:"#888",fontSize:13,gap:10}}><div style={{width:20,height:20,border:"2px solid #ddd",borderTopColor:"#185fa5",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />Conectando…</div>;}
+function ErrMsg(props){return <div style={{padding:"1rem",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,color:"#b91c1c",fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>⚠️ {props.msg}</span>{props.onRetry&&<Btn onClick={props.onRetry}>Reintentar</Btn>}</div>;}
+
+// ── PAGINACIÓN ────────────────────────────────────────────────────────────────
+function Paginacion(props) {
+  var total=props.total, pagina=props.pagina, onChange=props.onChange;
+  var totalPags=Math.max(1,Math.ceil(total/POR_PAGINA));
+  if(totalPags<=1) return null;
+  var pages=[];
+  for(var i=1;i<=totalPags;i++) pages.push(i);
+  return <div style={{display:"flex",alignItems:"center",gap:6,marginTop:16,flexWrap:"wrap",justifyContent:"center"}}>
+    <Btn onClick={function(){onChange(pagina-1);}} disabled={pagina<=1} style={{padding:"5px 10px",fontSize:12}}>‹</Btn>
+    {pages.map(function(p){
+      return <button key={p} onClick={function(){onChange(p);}}
+        style={{width:32,height:32,borderRadius:6,border:"1px solid #ddd",cursor:"pointer",fontWeight:p===pagina?600:400,background:p===pagina?"#185fa5":"#fff",color:p===pagina?"#fff":"#555",fontSize:13}}>
+        {p}
+      </button>;
+    })}
+    <Btn onClick={function(){onChange(pagina+1);}} disabled={pagina>=totalPags} style={{padding:"5px 10px",fontSize:12}}>›</Btn>
+    <span style={{fontSize:12,color:"#888",marginLeft:8}}>{total} clientes · pág. {pagina}/{totalPags}</span>
   </div>;
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
-function Login({ onLogin }) {
-  const [gestor, setGestor] = useState("");
-  const [pass, setPass] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [usuarios, setUsuarios] = useState([]);
-  useEffect(() => { sbGet("usuarios", "select=nombre&order=nombre.asc").then(r => setUsuarios(r.map(x => x.nombre))).catch(() => {}); }, []);
-  async function handleLogin() {
-    if (!gestor) { setError("Selecciona tu nombre"); return; }
-    if (!pass)   { setError("Ingresa tu contraseña"); return; }
+function Login(props) {
+  var [gestor,setGestor]=useState("");
+  var [pass,setPass]=useState("");
+  var [error,setError]=useState("");
+  var [loading,setLoading]=useState(false);
+  var [usuarios,setUsuarios]=useState([]);
+  useEffect(function(){sbGet("usuarios","select=nombre&order=nombre.asc").then(function(r){setUsuarios(r.map(function(x){return x.nombre;}));}).catch(function(){});;},[]);
+  function handleLogin(){
+    if(!gestor){setError("Selecciona tu nombre");return;}
+    if(!pass){setError("Ingresa tu contraseña");return;}
     setLoading(true);
-    try {
-      const rows = await sbGet("usuarios", `nombre=eq.${encodeURIComponent(gestor)}&select=nombre,password,admin,linea_negocio`);
-      if (!rows.length || rows[0].password !== pass) { setError("Contraseña incorrecta"); setLoading(false); return; }
-      const lineas = (rows[0].linea_negocio || "La Sin Gluten").split("|");
-      const u = { nombre: rows[0].nombre, admin: rows[0].admin, lineas, lineaActiva: lineas[0] };
-      sessionStorage.setItem("crm_session", JSON.stringify(u));
-      onLogin(u);
-    } catch { setError("Error de conexión"); }
-    finally { setLoading(false); }
+    sbGet("usuarios","nombre=eq."+encodeURIComponent(gestor)+"&select=nombre,password,admin,linea_negocio").then(function(rows){
+      if(!rows.length||rows[0].password!==pass){setError("Contraseña incorrecta");setLoading(false);return;}
+      var lineas=(rows[0].linea_negocio||"La Sin Gluten").split("|");
+      var u={nombre:rows[0].nombre,admin:rows[0].admin,lineas:lineas,lineaActiva:lineas[0]};
+      sessionStorage.setItem("crm_session",JSON.stringify(u));
+      props.onLogin(u);
+    }).catch(function(){setError("Error de conexión");setLoading(false);});
   }
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)" }}>
-      <div style={{ background: "#fff", borderRadius: 16, padding: "2.5rem 2rem", width: "100%", maxWidth: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", animation: "slideIn 0.3s ease" }}>
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div style={{ width: 90, height: 90, borderRadius: "50%", overflow: "hidden", margin: "0 auto 1rem", border: "3px solid #8ecfd4" }}>
-            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#8ecfd4,#5bb5bc)"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:"2.5rem 2rem",width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",animation:"slideIn 0.3s ease"}}>
+        <div style={{textAlign:"center",marginBottom:"2rem"}}>
+          <div style={{width:90,height:90,borderRadius:"50%",overflow:"hidden",margin:"0 auto 1rem",border:"3px solid #8ecfd4"}}>
+            <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover"}} />
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>CRM Panificadora</div>
-          <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>La Sin Gluten · Bauer Lemans</div>
+          <div style={{fontSize:18,fontWeight:700}}>CRM Panificadora</div>
+          <div style={{fontSize:13,color:"#888",marginTop:4}}>La Sin Gluten · Bauer Lemans</div>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Tu nombre</div>
-          <Sel value={gestor} onChange={v => { setGestor(v); setError(""); }} options={usuarios} placeholder="Selecciona tu nombre" />
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:12,color:"#666",marginBottom:4}}>Tu nombre</div>
+          <Sel value={gestor} onChange={function(v){setGestor(v);setError("");}} options={usuarios} placeholder="Selecciona tu nombre" />
         </div>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Contraseña</div>
-          <input type="password" value={pass} onChange={e => { setPass(e.target.value); setError(""); }}
-            onKeyDown={e => e.key === "Enter" && handleLogin()} placeholder="Tu contraseña"
-            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: "100%" }} />
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:12,color:"#666",marginBottom:4}}>Contraseña</div>
+          <input type="password" value={pass} onChange={function(e){setPass(e.target.value);setError("");}}
+            onKeyDown={function(e){if(e.key==="Enter")handleLogin();}} placeholder="Tu contraseña"
+            style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%"}} />
         </div>
-        {error && <div style={{ fontSize: 12, color: "#e24b4a", marginBottom: 12, textAlign: "center" }}>{error}</div>}
-        <Btn variant="primary" onClick={handleLogin} disabled={loading} style={{ width: "100%", padding: "10px", fontSize: 14 }}>{loading ? "Verificando…" : "Entrar"}</Btn>
+        {error&&<div style={{fontSize:12,color:"#e24b4a",marginBottom:12,textAlign:"center"}}>{error}</div>}
+        <Btn variant="primary" onClick={handleLogin} disabled={loading} style={{width:"100%",padding:"10px",fontSize:14}}>{loading?"Verificando…":"Entrar"}</Btn>
       </div>
     </div>
   );
 }
 
-// ── ADMIN PANEL ───────────────────────────────────────────────────────────────
+// ── ADMIN ─────────────────────────────────────────────────────────────────────
 function AdminPanel() {
-  const [usuarios, setUsuarios] = useState([]);
-  const [newPasses, setNewPasses] = useState({});
-  const [emails, setEmails] = useState({});
-  const [lineas, setLineas] = useState({});
-  const [saved, setSaved] = useState({});
-  useEffect(() => {
-    sbGet("usuarios", "select=id,nombre,admin,email,linea_negocio&order=nombre.asc").then(rows => {
+  var [usuarios,setUsuarios]=useState([]);
+  var [newPasses,setNewPasses]=useState({});
+  var [emails,setEmails]=useState({});
+  var [lineas,setLineas]=useState({});
+  var [saved,setSaved]=useState({});
+  useEffect(function(){
+    sbGet("usuarios","select=id,nombre,admin,email,linea_negocio&order=nombre.asc").then(function(rows){
       setUsuarios(rows);
-      const em = {}, ln = {};
-      rows.forEach(r => { em[r.id] = r.email || ""; ln[r.id] = (r.linea_negocio || "La Sin Gluten").split("|"); });
-      setEmails(em); setLineas(ln);
-    }).catch(() => {});
-  }, []);
-
-  function toggleLinea(uid, linea) {
-    const current = lineas[uid] || [];
-    const updated = current.includes(linea) ? current.filter(l => l !== linea) : [...current, linea];
-    if (updated.length === 0) return; // al menos una línea
-    setLineas(l => ({ ...l, [uid]: updated }));
+      var em={},ln={};
+      rows.forEach(function(r){em[r.id]=r.email||"";ln[r.id]=(r.linea_negocio||"La Sin Gluten").split("|");});
+      setEmails(em);setLineas(ln);
+    }).catch(function(){});
+  },[]);
+  function toggleLinea(uid,linea){
+    var cur=lineas[uid]||[];
+    var upd=cur.includes(linea)?cur.filter(function(l){return l!==linea;}):cur.concat([linea]);
+    if(!upd.length)return;
+    var next=Object.assign({},lineas);next[uid]=upd;setLineas(next);
   }
-
-  async function saveUser(u) {
-    const np = newPasses[u.id]?.trim();
-    const em = emails[u.id]?.trim();
-    const ln = (lineas[u.id] || ["La Sin Gluten"]).join("|");
-    const body = { linea_negocio: ln };
-    if (np) { if (np.length < 4) { alert("Mínimo 4 caracteres"); return; } body.password = np; }
-    if (em !== undefined) body.email = em;
-    try {
-      await sbPatch("usuarios", u.id, body);
-      setNewPasses(p => ({ ...p, [u.id]: "" }));
-      setSaved(s => ({ ...s, [u.id]: true }));
-      setTimeout(() => setSaved(s => ({ ...s, [u.id]: false })), 2000);
-    } catch (e) { alert("Error: " + e.message); }
+  function saveUser(u){
+    var np=(newPasses[u.id]||"").trim();
+    var em=(emails[u.id]||"").trim();
+    var ln=(lineas[u.id]||["La Sin Gluten"]).join("|");
+    var body={linea_negocio:ln,email:em};
+    if(np){if(np.length<4){alert("Mínimo 4 caracteres");return;}body.password=np;}
+    sbPatch("usuarios",u.id,body).then(function(){
+      var np2=Object.assign({},newPasses);np2[u.id]="";setNewPasses(np2);
+      var sv=Object.assign({},saved);sv[u.id]=true;setSaved(sv);
+      setTimeout(function(){var sv2=Object.assign({},saved);sv2[u.id]=false;setSaved(sv2);},2000);
+    }).catch(function(e){alert("Error: "+e.message);});
   }
-
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>🔐 Gestión de usuarios</div>
-      {usuarios.map(u => (
-        <div key={u.id} style={{ marginBottom: 12, padding: "12px 14px", background: "#f9f9f9", borderRadius: 8, border: "1px solid #eee" }}>
-          <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>{u.nombre} {u.admin && <Badge color="#185fa5" label="Admin" />}</div>
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>Líneas de negocio asignadas:</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {LINEAS.map(l => (
-                <label key={l} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13 }}>
-                  <input type="checkbox" checked={(lineas[u.id] || []).includes(l)} onChange={() => toggleLinea(u.id, l)} />
-                  <span style={{ color: LINEA_COLORS[l], fontWeight: 500 }}>{l}</span>
-                </label>
-              ))}
+    <div style={{marginBottom:24}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:12,color:"#555"}}>🔐 Gestión de usuarios</div>
+      {usuarios.map(function(u){
+        return <div key={u.id} style={{marginBottom:12,padding:"12px 14px",background:"#f9f9f9",borderRadius:8,border:"1px solid #eee"}}>
+          <div style={{fontSize:13,fontWeight:500,marginBottom:10}}>{u.nombre} {u.admin&&<Badge color="#185fa5" label="Admin" />}</div>
+          <div style={{marginBottom:8}}>
+            <div style={{fontSize:12,color:"#666",marginBottom:6}}>Líneas de negocio:</div>
+            <div style={{display:"flex",gap:12}}>
+              {LINEAS.map(function(l){
+                return <label key={l} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+                  <input type="checkbox" checked={(lineas[u.id]||[]).includes(l)} onChange={function(){toggleLinea(u.id,l);}} />
+                  <span style={{color:LINEA_COLOR[l],fontWeight:500}}>{l}</span>
+                </label>;
+              })}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input type="email" value={emails[u.id] || ""} onChange={e => setEmails(p => ({ ...p, [u.id]: e.target.value }))}
-              placeholder="Email notificaciones" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 12, flex: 2, minWidth: 180 }} />
-            <input type="password" value={newPasses[u.id] || ""} onChange={e => setNewPasses(p => ({ ...p, [u.id]: e.target.value }))}
-              placeholder="Nueva contraseña" style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 12, flex: 1, minWidth: 140 }} />
-            <Btn variant="primary" onClick={() => saveUser(u)}>{saved[u.id] ? "✓ Guardado" : "Guardar"}</Btn>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <input type="email" value={emails[u.id]||""} onChange={function(e){var em=Object.assign({},emails);em[u.id]=e.target.value;setEmails(em);}}
+              placeholder="Email notificaciones" style={{padding:"6px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:12,flex:2,minWidth:180}} />
+            <input type="password" value={newPasses[u.id]||""} onChange={function(e){var np=Object.assign({},newPasses);np[u.id]=e.target.value;setNewPasses(np);}}
+              placeholder="Nueva contraseña" style={{padding:"6px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:12,flex:1,minWidth:140}} />
+            <Btn variant="primary" onClick={function(){saveUser(u);}}>{saved[u.id]?"✓ Guardado":"Guardar"}</Btn>
           </div>
-        </div>
-      ))}
+        </div>;
+      })}
     </div>
   );
 }
 
 // ── NOTIF CONFIG ──────────────────────────────────────────────────────────────
-function NotifConfig({ activities, clients, currentUser }) {
-  const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
-  const [cfg, setCfg] = useState(() => { try { return JSON.parse(localStorage.getItem("crm_notif") || '{"horaM":"08:00","horaT":"18:00","activo":true}'); } catch { return { horaM: "08:00", horaT: "18:00", activo: true }; } });
-  const [sending, setSending] = useState(false);
-  const [lastSent, setLastSent] = useState(() => { try { return JSON.parse(localStorage.getItem("crm_notif_last") || "{}"); } catch { return {}; } });
-  const save = c => { setCfg(c); localStorage.setItem("crm_notif", JSON.stringify(c)); };
-
-  async function sendAll(momento) {
+function NotifConfig(props) {
+  var activities=props.activities,clients=props.clients,currentUser=props.currentUser;
+  function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
+  var [cfg,setCfg]=useState(function(){try{return JSON.parse(localStorage.getItem("crm_notif")||'{"horaM":"08:00","horaT":"18:00","activo":true}');}catch(e){return{horaM:"08:00",horaT:"18:00",activo:true};}});
+  var [sending,setSending]=useState(false);
+  var [lastSent,setLastSent]=useState(function(){try{return JSON.parse(localStorage.getItem("crm_notif_last")||"{}");}catch(e){return{};}});
+  function saveCfg(c){setCfg(c);localStorage.setItem("crm_notif",JSON.stringify(c));}
+  function sendAll(momento){
     setSending(true);
-    const usuarios = await sbGet("usuarios", "select=nombre,email");
-    let ok = 0;
-    for (const u of usuarios) {
-      if (!u.email) continue;
-      const res = buildResumen(u.nombre, activities, clientName);
-      if (await sendNotifEmail(u.nombre, u.email, momento, res)) ok++;
-    }
-    const now = new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-    const updated = { ...lastSent, [momento]: now };
-    setLastSent(updated); localStorage.setItem("crm_notif_last", JSON.stringify(updated));
-    setSending(false); alert(`✅ Enviado a ${ok} gestor${ok !== 1 ? "es" : ""}`);
+    sbGet("usuarios","select=nombre,email").then(function(usuarios){
+      var promises=usuarios.filter(function(u){return !!u.email;}).map(function(u){
+        var res=buildResumen(u.nombre,activities,clientName);
+        return sendEmail(u.nombre,u.email,momento,res);
+      });
+      Promise.all(promises).then(function(results){
+        var ok=results.filter(Boolean).length;
+        var now=new Date().toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+        var upd=Object.assign({},lastSent);upd[momento]=now;
+        setLastSent(upd);localStorage.setItem("crm_notif_last",JSON.stringify(upd));
+        setSending(false);alert("✅ Enviado a "+ok+" gestor"+(ok!==1?"es":""));
+      });
+    }).catch(function(){setSending(false);});
   }
-  async function sendTest() {
+  function sendTest(){
     setSending(true);
-    const rows = await sbGet("usuarios", `nombre=eq.${encodeURIComponent(currentUser.nombre)}&select=nombre,email`);
-    const u = rows[0];
-    if (!u?.email) { alert("No tienes email configurado."); setSending(false); return; }
-    const res = buildResumen(u.nombre, activities, clientName);
-    const ok = await sendNotifEmail(u.nombre, u.email, "prueba", res);
-    setSending(false); alert(ok ? `✅ Email enviado a ${u.email}` : "❌ Error.");
+    sbGet("usuarios","nombre=eq."+encodeURIComponent(currentUser.nombre)+"&select=nombre,email").then(function(rows){
+      var u=rows[0];
+      if(!u||!u.email){alert("No tienes email configurado.");setSending(false);return;}
+      var res=buildResumen(u.nombre,activities,clientName);
+      sendEmail(u.nombre,u.email,"prueba",res).then(function(ok){setSending(false);alert(ok?"✅ Email enviado a "+u.email:"❌ Error.");});
+    }).catch(function(){setSending(false);});
   }
-  useEffect(() => {
-    if (!cfg.activo) return;
-    const iv = setInterval(async () => {
-      const now = new Date();
-      const hhmm = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-      const ds = now.toDateString();
-      const stored = JSON.parse(localStorage.getItem("crm_notif_auto") || "{}");
-      if (hhmm === cfg.horaM && stored.m !== ds) { localStorage.setItem("crm_notif_auto", JSON.stringify({ ...stored, m: ds })); await sendAll("inicio del día"); }
-      if (hhmm === cfg.horaT && stored.t !== ds) { localStorage.setItem("crm_notif_auto", JSON.stringify({ ...stored, t: ds })); await sendAll("fin del día"); }
-    }, 30000);
-    return () => clearInterval(iv);
-  }, [cfg, activities]);
-
+  useEffect(function(){
+    if(!cfg.activo)return;
+    var iv=setInterval(function(){
+      var now=new Date();
+      var hhmm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+      var ds=now.toDateString();
+      var stored={};try{stored=JSON.parse(localStorage.getItem("crm_notif_auto")||"{}");}catch(e){}
+      if(hhmm===cfg.horaM&&stored.m!==ds){var s1=Object.assign({},stored);s1.m=ds;localStorage.setItem("crm_notif_auto",JSON.stringify(s1));sendAll("inicio del día");}
+      if(hhmm===cfg.horaT&&stored.t!==ds){var s2=Object.assign({},stored);s2.t=ds;localStorage.setItem("crm_notif_auto",JSON.stringify(s2));sendAll("fin del día");}
+    },30000);
+    return function(){clearInterval(iv);};
+  },[cfg,activities]);
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>📧 Notificaciones por email</div>
-      <div style={{ background: "#f9f9f9", border: "1px solid #eee", borderRadius: 10, padding: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>Automáticas</span>
-          <label style={{ position: "relative", display: "inline-block", width: 44, height: 24, cursor: "pointer" }}>
-            <input type="checkbox" checked={cfg.activo} onChange={e => save({ ...cfg, activo: e.target.checked })} style={{ opacity: 0, width: 0, height: 0 }} />
-            <span style={{ position: "absolute", inset: 0, borderRadius: 24, background: cfg.activo ? "#185fa5" : "#ccc", transition: "0.3s" }}>
-              <span style={{ position: "absolute", top: 3, left: cfg.activo ? 22 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "0.3s" }} />
+    <div style={{marginBottom:24}}>
+      <div style={{fontSize:13,fontWeight:600,marginBottom:12,color:"#555"}}>📧 Notificaciones por email</div>
+      <div style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:10,padding:"1rem"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <span style={{fontSize:13,fontWeight:500}}>Automáticas</span>
+          <label style={{position:"relative",display:"inline-block",width:44,height:24,cursor:"pointer"}}>
+            <input type="checkbox" checked={cfg.activo} onChange={function(e){saveCfg(Object.assign({},cfg,{activo:e.target.checked}));}} style={{opacity:0,width:0,height:0}} />
+            <span style={{position:"absolute",inset:0,borderRadius:24,background:cfg.activo?"#185fa5":"#ccc",transition:"0.3s"}}>
+              <span style={{position:"absolute",top:3,left:cfg.activo?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"0.3s"}} />
             </span>
           </label>
-          <span style={{ fontSize: 12, color: cfg.activo ? "#1d9e75" : "#aaa" }}>{cfg.activo ? "Activadas" : "Desactivadas"}</span>
+          <span style={{fontSize:12,color:cfg.activo?"#1d9e75":"#aaa"}}>{cfg.activo?"Activadas":"Desactivadas"}</span>
         </div>
-        <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
-          {[["🌅 Mañana", "horaM", "inicio del día"], ["🌆 Tarde", "horaT", "fin del día"]].map(([l, k, mk]) => (
-            <div key={k} style={{ flex: 1, minWidth: 140 }}>
-              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>{l}</div>
-              <input type="time" value={cfg[k]} onChange={e => save({ ...cfg, [k]: e.target.value })}
-                style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, width: "100%" }} />
-              {lastSent[mk] && <div style={{ fontSize: 11, color: "#aaa", marginTop: 3 }}>Último: {lastSent[mk]}</div>}
-            </div>
-          ))}
+        <div style={{display:"flex",gap:16,marginBottom:12,flexWrap:"wrap"}}>
+          {[["🌅 Mañana","horaM","inicio del día"],["🌆 Tarde","horaT","fin del día"]].map(function(item){
+            var l=item[0],k=item[1],mk=item[2];
+            return <div key={k} style={{flex:1,minWidth:140}}>
+              <div style={{fontSize:12,color:"#666",marginBottom:4}}>{l}</div>
+              <input type="time" value={cfg[k]} onChange={function(e){saveCfg(Object.assign({},cfg,{[k]:e.target.value}));}}
+                style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%"}} />
+              {lastSent[mk]&&<div style={{fontSize:11,color:"#aaa",marginTop:3}}>Último: {lastSent[mk]}</div>}
+            </div>;
+          })}
         </div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 12 }}>⚠️ Requiere que el CRM esté abierto en el navegador.</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{fontSize:12,color:"#888",marginBottom:12}}>⚠️ Requiere que el CRM esté abierto.</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <Btn variant="primary" onClick={sendTest} disabled={sending}>📧 Prueba (solo a mí)</Btn>
-          <Btn variant="success" onClick={() => sendAll("inicio del día")} disabled={sending}>🌅 Enviar mañana</Btn>
-          <Btn variant="success" onClick={() => sendAll("fin del día")} disabled={sending}>🌆 Enviar tarde</Btn>
+          <Btn variant="success" onClick={function(){sendAll("inicio del día");}} disabled={sending}>🌅 Enviar mañana</Btn>
+          <Btn variant="success" onClick={function(){sendAll("fin del día");}} disabled={sending}>🌆 Enviar tarde</Btn>
         </div>
       </div>
     </div>
@@ -357,735 +372,829 @@ function NotifConfig({ activities, clients, currentUser }) {
 }
 
 // ── NOTIF BANNER ──────────────────────────────────────────────────────────────
-function NotifBanner({ activities, clients, filterGestor }) {
-  const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
-  const alertas = useMemo(() => activities
-    .filter(a => a.estado !== "Completada" && (!filterGestor || a.gestor === filterGestor))
-    .map(a => {
-      const d = diffDays(a.fecha);
-      if (d < 0)  return { ...a, tipo: "vencida", label: `Vencida hace ${Math.abs(d)}d` };
-      if (d === 0) return { ...a, tipo: "hoy", label: "Vence hoy" };
-      if (d <= 3)  return { ...a, tipo: "proxima", label: `Vence en ${d}d` };
+function NotifBanner(props) {
+  var activities=props.activities,clients=props.clients,filterGestor=props.filterGestor;
+  function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
+  var alertas=useMemo(function(){
+    return activities.filter(function(a){return a.estado!=="Completada"&&(!filterGestor||a.gestor===filterGestor);}).map(function(a){
+      var d=ddiff(a.fecha);
+      if(d<0) return Object.assign({},a,{tipo:"vencida",label:"Vencida hace "+Math.abs(d)+"d"});
+      if(d===0)return Object.assign({},a,{tipo:"hoy",label:"Vence hoy"});
+      if(d<=3) return Object.assign({},a,{tipo:"proxima",label:"Vence en "+d+"d"});
       return null;
-    }).filter(Boolean).sort((a, b) => a.fecha.localeCompare(b.fecha)),
-  [activities, filterGestor]);
-  const [visible, setVisible] = useState(true);
-  useEffect(() => setVisible(true), [filterGestor]);
-  if (!alertas.length || !visible) return null;
-  const isV = alertas.some(a => a.tipo === "vencida"), isH = alertas.some(a => a.tipo === "hoy");
+    }).filter(Boolean).sort(function(a,b){return a.fecha.localeCompare(b.fecha);});
+  },[activities,filterGestor]);
+  var [visible,setVisible]=useState(true);
+  useEffect(function(){setVisible(true);},[filterGestor]);
+  if(!alertas.length||!visible)return null;
+  var isV=alertas.some(function(a){return a.tipo==="vencida";}),isH=alertas.some(function(a){return a.tipo==="hoy";});
   return (
-    <div style={{ background: isV ? "#fef2f2" : isH ? "#fff7ed" : "#fffbeb", border: `1px solid ${isV ? "#fca5a5" : isH ? "#fed7aa" : "#fde68a"}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{isV ? "🔴" : isH ? "🟠" : "🟡"} {alertas.length} actividad{alertas.length !== 1 ? "es" : ""} requieren atención</div>
-          {alertas.slice(0, 3).map(a => (
-            <div key={a.id} style={{ fontSize: 12, color: "#555", marginBottom: 3, display: "flex", gap: 8 }}>
-              <Badge color={isV ? "#e24b4a" : isH ? "#ba7517" : "#d97706"} label={a.label} />
-              <span>{a.titulo || a.nota?.slice(0,40)} — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
-            </div>
-          ))}
-          {alertas.length > 3 && <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>…y {alertas.length - 3} más</div>}
+    <div style={{background:isV?"#fef2f2":isH?"#fff7ed":"#fffbeb",border:"1px solid "+(isV?"#fca5a5":isH?"#fed7aa":"#fde68a"),borderRadius:10,padding:"0.75rem 1rem",marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between"}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>{isV?"🔴":isH?"🟠":"🟡"} {alertas.length} actividad{alertas.length!==1?"es":""} requieren atención</div>
+          {alertas.slice(0,3).map(function(a){
+            return <div key={a.id} style={{fontSize:12,color:"#555",marginBottom:3,display:"flex",gap:8}}>
+              <Badge color={isV?"#e24b4a":isH?"#ba7517":"#d97706"} label={a.label} />
+              <span>{a.titulo||(a.nota||"").slice(0,40)} — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
+            </div>;
+          })}
+          {alertas.length>3&&<div style={{fontSize:12,color:"#888",marginTop:4}}>…y {alertas.length-3} más</div>}
         </div>
-        <button onClick={() => setVisible(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#888", fontSize: 18, marginLeft: 12 }}>×</button>
+        <button onClick={function(){setVisible(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#888",fontSize:18,marginLeft:12}}>×</button>
       </div>
     </div>
   );
 }
 
+// ── FORM: Contactos múltiples ─────────────────────────────────────────────────
+function ContactosEditor(props) {
+  var contactos=props.contactos, onChange=props.onChange;
+  function addContacto(){
+    onChange(contactos.concat([{nombre:"",telefono:"",email:"",sector:"",_new:true}]));
+  }
+  function updateContacto(i,field,value){
+    var updated=contactos.map(function(c,idx){return idx===i?Object.assign({},c,{[field]:value}):c;});
+    onChange(updated);
+  }
+  function removeContacto(i){
+    onChange(contactos.filter(function(_,idx){return idx!==i;}));
+  }
+  return (
+    <div>
+      {contactos.map(function(c,i){
+        return <div key={i} style={{background:"#f9f9f9",border:"1px solid #eee",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <span style={{fontSize:12,fontWeight:600,color:"#555"}}>Contacto {i+1}</span>
+            <button onClick={function(){removeContacto(i);}} style={{background:"none",border:"none",cursor:"pointer",color:"#e24b4a",fontSize:16}}>×</button>
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+            <div style={{flex:2,minWidth:140}}>
+              <div style={{fontSize:11,color:"#666",marginBottom:2}}>Nombre *</div>
+              <input value={c.nombre||""} onChange={function(e){updateContacto(i,"nombre",e.target.value);}} placeholder="Nombre completo"
+                style={{padding:"6px 10px",border:"1px solid #ddd",borderRadius:6,fontSize:12,width:"100%"}} />
+            </div>
+            <div style={{flex:1,minWidth:120}}>
+              <div style={{fontSize:11,color:"#666",marginBottom:2}}>Sector</div>
+              <input value={c.sector||""} onChange={function(e){updateContacto(i,"sector",e.target.value);}} placeholder="Compras, Dirección…"
+                style={{padding:"6px 10px",border:"1px solid #ddd",borderRadius:6,fontSize:12,width:"100%"}} />
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:130}}>
+              <div style={{fontSize:11,color:"#666",marginBottom:2}}>Teléfono</div>
+              <input value={c.telefono||""} onChange={function(e){updateContacto(i,"telefono",e.target.value);}} placeholder="+34612345678"
+                style={{padding:"6px 10px",border:"1px solid #ddd",borderRadius:6,fontSize:12,width:"100%"}} />
+            </div>
+            <div style={{flex:2,minWidth:160}}>
+              <div style={{fontSize:11,color:"#666",marginBottom:2}}>Email</div>
+              <input value={c.email||""} onChange={function(e){updateContacto(i,"email",e.target.value);}} placeholder="email@empresa.com"
+                style={{padding:"6px 10px",border:"1px solid #ddd",borderRadius:6,fontSize:12,width:"100%"}} />
+            </div>
+          </div>
+        </div>;
+      })}
+      <button onClick={addContacto} style={{width:"100%",padding:"8px",border:"1px dashed #ddd",borderRadius:8,cursor:"pointer",fontSize:13,color:"#555",background:"#fafafa",marginTop:4}}>
+        + Agregar contacto
+      </button>
+    </div>
+  );
+}
+
 // ── FORM: Cliente ─────────────────────────────────────────────────────────────
-function ClienteForm({ initial, config, clients, onSave, onCancel, saving, currentUser, lineaActiva }) {
-  const emptyC = { nombre: "", nif: "", calle: "", numero: "", cp: "", ciudad: "", pais: "España", telefono: "", email: "", contacto: "", canal: "", grupo: "", gestor: currentUser.nombre, tipo_cliente: "Potencial", comentarios: "", linea_negocio: lineaActiva };
-  const [form, setForm] = useState(() => ({ ...emptyC, canal: config.canales[0] || "", grupo: config.grupos[0] || "", ...initial }));
-  const [errors, setErrors] = useState({});
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  function validate() {
-    const errs = {};
-    if (!form.nombre.trim()) errs.nombre = "Obligatorio";
-    if (!form.nif.trim()) errs.nif = "Obligatorio";
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Email no válido";
-    if (!form.contacto.trim()) errs.contacto = "Obligatorio";
-    const others = clients.filter(c => c.id !== form.id);
-    if (form.nombre.trim() && others.some(c => normalize(c.nombre) === normalize(form.nombre))) errs.nombre = "Ya existe";
-    if (form.nif.trim() && others.some(c => normalize(c.nif) === normalize(form.nif))) errs.nif = "NIF ya registrado";
+function ClienteForm(props) {
+  var config=props.config,clients=props.clients,onSave=props.onSave,onCancel=props.onCancel,saving=props.saving,currentUser=props.currentUser,lineaActiva=props.lineaActiva;
+  var emptyC={nombre:"",nif:"",calle:"",numero:"",cp:"",ciudad:"",pais:"España",telefono:"",email:"",contacto:"",canal:"",grupo:"",gestor:currentUser.nombre,tipo_cliente:"Potencial",comentarios:"",linea_negocio:lineaActiva};
+  var [form,setForm]=useState(function(){return Object.assign({},emptyC,{canal:config.canales[0]||"",grupo:config.grupos[0]||""},props.initial||{});});
+  var [contactos,setContactos]=useState([]);
+  var [errors,setErrors]=useState({});
+
+  // Cargar contactos existentes si es edición
+  useEffect(function(){
+    if(props.initial&&props.initial.id){
+      sbGet("contactos","cliente_id=eq."+props.initial.id+"&order=id.asc").then(function(rows){setContactos(rows);}).catch(function(){});
+    }
+  },[]);
+
+  function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
+  function validate(){
+    var errs={};
+    if(!form.nombre.trim())errs.nombre="Obligatorio";
+    if(form.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))errs.email="Email no válido";
+    var others=clients.filter(function(c){return c.id!==form.id;});
+    if(form.nombre.trim()&&others.some(function(c){return norm(c.nombre)===norm(form.nombre);}))errs.nombre="Ya existe";
     return errs;
   }
-  function handleSave() { const e = validate(); setErrors(e); if (!Object.keys(e).length) onSave(form); }
+  function handleSave(){var e=validate();setErrors(e);if(!Object.keys(e).length)onSave(form,contactos);}
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar cliente" : "Nuevo cliente"}</span>
-        <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <span style={{fontSize:15,fontWeight:600}}>{form.id?"Editar cliente":"Nuevo cliente"}</span>
+        <button onClick={onCancel} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>×</button>
       </div>
-      {form.codigo && <div style={{ fontSize: 12, color: "#185fa5", fontWeight: 600, marginBottom: 10 }}>Código: {form.codigo}</div>}
+      {form.codigo&&<div style={{fontSize:12,color:"#185fa5",fontWeight:600,marginBottom:10}}>Código: {form.codigo}</div>}
       <FRow>
-        <FL label="Nombre de empresa *" flex={2} error={errors.nombre}><Inp value={form.nombre} onChange={v => set("nombre", v)} placeholder="Nombre empresa" error={errors.nombre} /></FL>
-        <FL label="NIF *" flex={1} error={errors.nif}><Inp value={form.nif} onChange={v => set("nif", v)} placeholder="A12345678" error={errors.nif} /></FL>
-        <FL label="Tipo" flex={1}><Sel value={form.tipo_cliente || "Potencial"} onChange={v => set("tipo_cliente", v)} options={TIPOS_CLIENTE} /></FL>
+        <FL label="Nombre de empresa *" flex={2} error={errors.nombre}><Inp value={form.nombre} onChange={function(v){set("nombre",v);}} placeholder="Nombre empresa" error={errors.nombre} /></FL>
+        <FL label="NIF" flex={1}><Inp value={form.nif} onChange={function(v){set("nif",v);}} placeholder="A12345678" /></FL>
+        <FL label="Tipo" flex={1}><Sel value={form.tipo_cliente||"Potencial"} onChange={function(v){set("tipo_cliente",v);}} options={TIPOS_CLI} /></FL>
       </FRow>
       <FRow>
-        <FL label="Línea de negocio" flex={1}>
-          <Sel value={form.linea_negocio || lineaActiva} onChange={v => set("linea_negocio", v)} options={LINEAS} />
-        </FL>
+        <FL label="Línea de negocio" flex={1}><Sel value={form.linea_negocio||lineaActiva} onChange={function(v){set("linea_negocio",v);}} options={LINEAS} /></FL>
       </FRow>
       <Sep label="Dirección" />
       <FRow>
-        <FL label="Calle" flex={3}><Inp value={form.calle} onChange={v => set("calle", v)} placeholder="Calle" /></FL>
-        <FL label="Número" flex={1}><Inp value={form.numero} onChange={v => set("numero", v)} placeholder="Nº" /></FL>
+        <FL label="Calle" flex={3}><Inp value={form.calle} onChange={function(v){set("calle",v);}} placeholder="Calle" /></FL>
+        <FL label="Número" flex={1}><Inp value={form.numero} onChange={function(v){set("numero",v);}} placeholder="Nº" /></FL>
       </FRow>
       <FRow>
-        <FL label="CP" flex={1}><Inp value={form.cp} onChange={v => set("cp", v)} placeholder="08001" /></FL>
-        <FL label="Ciudad" flex={2}><Inp value={form.ciudad} onChange={v => set("ciudad", v)} placeholder="Ciudad" /></FL>
-        <FL label="País" flex={2}><Inp value={form.pais} onChange={v => set("pais", v)} placeholder="España" /></FL>
+        <FL label="CP" flex={1}><Inp value={form.cp} onChange={function(v){set("cp",v);}} placeholder="08001" /></FL>
+        <FL label="Ciudad" flex={2}><Inp value={form.ciudad} onChange={function(v){set("ciudad",v);}} placeholder="Ciudad" /></FL>
+        <FL label="País" flex={2}><Inp value={form.pais} onChange={function(v){set("pais",v);}} placeholder="España" /></FL>
       </FRow>
-      <Sep label="Contacto" />
-      <FRow>
-        <FL label="Teléfono" flex={1}><Inp value={form.telefono} onChange={v => set("telefono", v)} placeholder="+34612345678" type="tel" /></FL>
-        <FL label="Email" flex={1} error={errors.email}><Inp value={form.email} onChange={v => set("email", v)} placeholder="email@empresa.com" error={errors.email} /></FL>
-      </FRow>
-      <FRow><FL label="Persona de contacto *" error={errors.contacto}><Inp value={form.contacto} onChange={v => set("contacto", v)} placeholder="Nombre y apellidos" error={errors.contacto} /></FL></FRow>
+      <Sep label="Contactos" />
+      <ContactosEditor contactos={contactos} onChange={setContactos} />
       <Sep label="Clasificación" />
       <FRow>
-        <FL label="Canal" flex={1}><Sel value={form.canal} onChange={v => set("canal", v)} options={config.canales} placeholder="Seleccionar" /></FL>
-        <FL label="Grupo" flex={1}><Sel value={form.grupo} onChange={v => set("grupo", v)} options={config.grupos} placeholder="Seleccionar" /></FL>
-        <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={v => set("gestor", v)} options={config.gestores} placeholder="Seleccionar" /></FL>
+        <FL label="Canal" flex={1}><Sel value={form.canal} onChange={function(v){set("canal",v);}} options={config.canales} placeholder="Seleccionar" /></FL>
+        <FL label="Grupo" flex={1}><Sel value={form.grupo} onChange={function(v){set("grupo",v);}} options={config.grupos} placeholder="Seleccionar" /></FL>
+        <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={function(v){set("gestor",v);}} options={config.gestores} placeholder="Seleccionar" /></FL>
       </FRow>
       <Sep label="Comentarios" />
-      <FRow>
-        <FL label="Comentarios del cliente" flex={1}>
-          <Textarea value={form.comentarios || ""} onChange={v => set("comentarios", v)} placeholder="Notas internas, observaciones…" rows={3} />
-        </FL>
-      </FRow>
-      <Btn variant="primary" onClick={handleSave} disabled={saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
+      <FRow><FL label="Comentarios del cliente"><Textarea value={form.comentarios||""} onChange={function(v){set("comentarios",v);}} placeholder="Notas internas, observaciones…" rows={3} /></FL></FRow>
+      <Btn variant="primary" onClick={handleSave} disabled={saving} style={{width:"100%",marginTop:8}}>{saving?"Guardando…":"Guardar"}</Btn>
     </Card>
   );
 }
 
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
-function ActividadForm({ initial, config, clients, onSave, onCancel, saving, currentUser, lineaActiva }) {
-  const clientesActivos = clients.filter(c => c.tipo_cliente !== "Inactivo");
-  const [form, setForm] = useState(() => ({
-    tipo: "Llamada", nota: "", titulo: "", fecha: today(),
-    gestor: currentUser.nombre, clienteId: "", estado: "Pendiente", prioridad: "Media",
-    linea_negocio: lineaActiva, ...initial
-  }));
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const clientesDelGestor = useMemo(() =>
-    form.gestor ? clientesActivos.filter(c => c.gestor === form.gestor) : clientesActivos,
-    [form.gestor, clientesActivos]
-  );
-  const handleGestorChange = v => {
-    const filtered = v ? clientesActivos.filter(c => c.gestor === v) : clientesActivos;
-    set("gestor", v);
-    if (!filtered.some(c => c.id === +form.clienteId)) set("clienteId", filtered[0]?.id || "");
-  };
-  const canSave = form.clienteId && form.nota.trim();
+function ActividadForm(props) {
+  var config=props.config,clients=props.clients,onSave=props.onSave,onCancel=props.onCancel,saving=props.saving,currentUser=props.currentUser,lineaActiva=props.lineaActiva;
+  var clientesActivos=clients.filter(function(c){return c.tipo_cliente!=="Inactivo";});
+  var initForm=Object.assign({tipo:"Llamada",nota:"",titulo:"",fecha:tod(),gestor:currentUser.nombre,clienteId:"",estado:"Pendiente",prioridad:"Media",linea_negocio:lineaActiva},props.initial||{});
+  var [form,setForm]=useState(initForm);
+  function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
+  var clientesDelGestor=useMemo(function(){return form.gestor?clientesActivos.filter(function(c){return c.gestor===form.gestor;}):clientesActivos;},[form.gestor,clients]);
+  function handleGestorChange(v){
+    var filtered=v?clientesActivos.filter(function(c){return c.gestor===v;}):clientesActivos;
+    set("gestor",v);
+    if(!filtered.some(function(c){return c.id===+form.clienteId;}))set("clienteId",filtered[0]?filtered[0].id:"");
+  }
+  var canSave=form.clienteId&&(form.nota||"").trim();
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>{form.id ? "Editar actividad" : "Nueva actividad"}</span>
-        <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <span style={{fontSize:15,fontWeight:600}}>{form.id?"Editar actividad":"Nueva actividad"}</span>
+        <button onClick={onCancel} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>×</button>
       </div>
       <FRow>
         <FL label="Gestor" flex={1}><Sel value={form.gestor} onChange={handleGestorChange} options={config.gestores} placeholder="Seleccionar" /></FL>
         <FL label="Cliente" flex={2}>
-          <select value={String(form.clienteId)} onChange={e => set("clienteId", +e.target.value)}
-            style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }}>
+          <select value={String(form.clienteId)} onChange={function(e){set("clienteId",+e.target.value);}}
+            style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
             <option value="">— Seleccionar cliente —</option>
-            {clientesDelGestor.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            {clientesDelGestor.map(function(c){return <option key={c.id} value={c.id}>{c.nombre}</option>;})}
           </select>
         </FL>
-        <FL label="Tipo" flex={1}><Sel value={form.tipo} onChange={v => set("tipo", v)} options={TIPOS} /></FL>
+        <FL label="Tipo" flex={1}><Sel value={form.tipo} onChange={function(v){set("tipo",v);}} options={TIPOS} /></FL>
       </FRow>
       <FRow>
-        <FL label="Título" flex={2}><Inp value={form.titulo} onChange={v => set("titulo", v)} placeholder="Título de la actividad" /></FL>
-        <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={v => set("fecha", v)} /></FL>
+        <FL label="Título" flex={2}><Inp value={form.titulo} onChange={function(v){set("titulo",v);}} placeholder="Título de la actividad" /></FL>
+        <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={function(v){set("fecha",v);}} /></FL>
       </FRow>
       <FRow>
-        <FL label="Prioridad" flex={1}><Sel value={form.prioridad} onChange={v => set("prioridad", v)} options={PRIORIDADES} /></FL>
-        <FL label="Estado" flex={1}><Sel value={form.estado} onChange={v => set("estado", v)} options={ESTADOS_ACT} /></FL>
+        <FL label="Prioridad" flex={1}><Sel value={form.prioridad} onChange={function(v){set("prioridad",v);}} options={PRIORIDADES} /></FL>
+        <FL label="Estado" flex={1}><Sel value={form.estado} onChange={function(v){set("estado",v);}} options={ESTADOS_ACT} /></FL>
       </FRow>
-      <FRow><FL label="Nota / Descripción" flex={1}><Textarea value={form.nota} onChange={v => set("nota", v)} placeholder="Describe la actividad…" /></FL></FRow>
-      <Btn variant="primary" onClick={() => canSave && onSave({ ...form, clienteId: +form.clienteId })} disabled={!canSave || saving} style={{ width: "100%", marginTop: 8 }}>{saving ? "Guardando…" : "Guardar"}</Btn>
+      <FRow><FL label="Nota / Descripción"><Textarea value={form.nota} onChange={function(v){set("nota",v);}} placeholder="Describe la actividad…" /></FL></FRow>
+      <Btn variant="primary" onClick={function(){if(canSave)onSave(Object.assign({},form,{clienteId:+form.clienteId}));}} disabled={!canSave||saving} style={{width:"100%",marginTop:8}}>{saving?"Guardando…":"Guardar"}</Btn>
     </Card>
   );
 }
 
 // ── DETALLE CLIENTE ───────────────────────────────────────────────────────────
-function DetalleCliente({ cliente, activities, onClose }) {
-  const cActs = activities.filter(a => a.cliente_id === cliente.id).sort((a, b) => b.fecha.localeCompare(a.fecha));
-  const dir = [cliente.calle, cliente.numero].filter(Boolean).join(" ") + ([cliente.cp, cliente.ciudad].filter(Boolean).length ? ", " + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ") : "") + (cliente.pais ? ", " + cliente.pais : "");
-  const tcColor = { Cliente: "#1d9e75", Potencial: "#ba7517", Inactivo: "#888" };
+function DetalleCliente(props) {
+  var cliente=props.cliente,activities=props.activities,onClose=props.onClose;
+  var [contactos,setContactos]=useState([]);
+  useEffect(function(){
+    if(cliente&&cliente.id){
+      sbGet("contactos","cliente_id=eq."+cliente.id+"&order=id.asc").then(function(rows){setContactos(rows);}).catch(function(){});
+    }
+  },[cliente&&cliente.id]);
+  var cActs=activities.filter(function(a){return a.cliente_id===cliente.id;}).sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
+  var dir=[cliente.calle,cliente.numero].filter(Boolean).join(" ")+([cliente.cp,cliente.ciudad].filter(Boolean).length?", "+[cliente.cp,cliente.ciudad].filter(Boolean).join(" "):""+(cliente.pais?", "+cliente.pais:""));
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
-          <span style={{ fontSize: 15, fontWeight: 600 }}>{cliente.nombre}</span>
-          {cliente.codigo && <span style={{ fontSize: 12, color: "#185fa5", fontWeight: 600, marginLeft: 10, background: "#185fa511", padding: "2px 8px", borderRadius: 8 }}>{cliente.codigo}</span>}
+          <span style={{fontSize:15,fontWeight:600}}>{cliente.nombre}</span>
+          {cliente.codigo&&<span style={{fontSize:12,color:"#185fa5",fontWeight:600,marginLeft:10,background:"#185fa511",padding:"2px 8px",borderRadius:8}}>{cliente.codigo}</span>}
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>×</button>
       </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        {cliente.linea_negocio && <Badge color={LINEA_COLORS[cliente.linea_negocio] || "#888"} label={cliente.linea_negocio} />}
-        {cliente.tipo_cliente && <Badge color={tcColor[cliente.tipo_cliente] || "#888"} label={cliente.tipo_cliente} />}
-        {cliente.canal && <Badge color="#7f77dd" label={cliente.canal} />}
-        {cliente.grupo && <Badge color="#1d9e75" label={cliente.grupo} />}
-        {cliente.gestor && <Badge color="#378add" label={cliente.gestor} />}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        {cliente.linea_negocio&&<Badge color={LINEA_COLOR[cliente.linea_negocio]||"#888"} label={cliente.linea_negocio} />}
+        {cliente.tipo_cliente&&<Badge color={TCLI_C[cliente.tipo_cliente]||"#888"} label={cliente.tipo_cliente} />}
+        {cliente.canal&&<Badge color="#7f77dd" label={cliente.canal} />}
+        {cliente.grupo&&<Badge color="#1d9e75" label={cliente.grupo} />}
+        {cliente.gestor&&<Badge color="#378add" label={cliente.gestor} />}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 20px", fontSize: 13, marginBottom: 14 }}>
-        <div><span style={{ fontSize: 11, color: "#888" }}>NIF: </span>{cliente.nif || "—"}</div>
-        <div><span style={{ fontSize: 11, color: "#888" }}>Teléfono: </span>
-          {cliente.telefono ? <span>{cliente.telefono} <a href={`tel:${cliente.telefono}`} style={{ textDecoration: "none" }}>📞</a> <a href={`https://wa.me/${cliente.telefono.replace(/[\s+\-()]/g,"")}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>💬</a></span> : "—"}
-        </div>
-        <div><span style={{ fontSize: 11, color: "#888" }}>Email: </span>
-          {cliente.email ? <a href={`mailto:${cliente.email}`} style={{ color: "#185fa5", textDecoration: "none" }}>{cliente.email}</a> : "—"}
-        </div>
-        <div><span style={{ fontSize: 11, color: "#888" }}>Contacto: </span>{cliente.contacto || "—"}</div>
-        <div style={{ gridColumn: "1/-1" }}><span style={{ fontSize: 11, color: "#888" }}>Dirección: </span>{dir || "—"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px 20px",fontSize:13,marginBottom:14}}>
+        <div><span style={{fontSize:11,color:"#888"}}>NIF: </span>{cliente.nif||"—"}</div>
+        <div><span style={{fontSize:11,color:"#888"}}>Dirección: </span>{dir||"—"}</div>
       </div>
-      {cliente.comentarios && (
-        <div style={{ marginBottom: 14, padding: "8px 12px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 13, color: "#555" }}>
-          <span style={{ fontSize: 11, color: "#888", display: "block", marginBottom: 4 }}>💬 Comentarios:</span>
+      {cliente.comentarios&&(
+        <div style={{marginBottom:14,padding:"8px 12px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,fontSize:13,color:"#555"}}>
+          <span style={{fontSize:11,color:"#888",display:"block",marginBottom:4}}>💬 Comentarios:</span>
           {cliente.comentarios}
         </div>
       )}
-      <Sep label={`Historial de actividades (${cActs.length})`} />
-      {cActs.length === 0 ? <div style={{ fontSize: 12, color: "#888" }}>Sin actividades.</div> :
-        cActs.map(a => (
-          <div key={a.id} style={{ display: "flex", gap: 8, marginBottom: 10, padding: "8px 10px", background: "#f9f9f9", borderRadius: 8 }}>
-            <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-            <Badge color={estadoColor[a.estado || "Pendiente"]} label={a.estado || "Pendiente"} />
-            <div style={{ flex: 1 }}>
-              {a.titulo && <div style={{ fontSize: 13, fontWeight: 500 }}>{a.titulo}</div>}
-              <div style={{ fontSize: 13, color: "#555" }}>{a.nota}</div>
-              <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{a.fecha} · <strong>{a.gestor}</strong> · <Badge color={prioColor[a.prioridad || "Media"]} label={a.prioridad || "Media"} /></div>
+      {/* Contactos */}
+      <Sep label={"Contactos ("+(contactos.length)+")"} />
+      {contactos.length===0?<div style={{fontSize:12,color:"#888",marginBottom:8}}>Sin contactos registrados.</div>:
+        contactos.map(function(c){
+          return <div key={c.id} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"8px 10px",background:"#f9f9f9",borderRadius:8,marginBottom:6}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:600}}>{c.nombre}</div>
+              {c.sector&&<div style={{fontSize:11,color:"#7f77dd",marginTop:1}}>{c.sector}</div>}
+              <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap"}}>
+                {c.telefono&&<span style={{fontSize:12}}>{c.telefono} <a href={"tel:"+c.telefono} style={{textDecoration:"none"}}>📞</a> <a href={"https://wa.me/"+c.telefono.replace(/[\s+\-()]/g,"")} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>💬</a></span>}
+                {c.email&&<a href={"mailto:"+c.email} style={{fontSize:12,color:"#185fa5",textDecoration:"none"}}>✉️ {c.email}</a>}
+              </div>
             </div>
-          </div>
-        ))}
+          </div>;
+        })
+      }
+      <Sep label={"Historial de actividades ("+cActs.length+")"} />
+      {cActs.length===0?<div style={{fontSize:12,color:"#888"}}>Sin actividades.</div>:
+        cActs.map(function(a){
+          return <div key={a.id} style={{display:"flex",gap:8,marginBottom:10,padding:"8px 10px",background:"#f9f9f9",borderRadius:8}}>
+            <Badge color={TIPO_C[a.tipo]} label={a.tipo} />
+            <Badge color={EST_C[a.estado||"Pendiente"]} label={a.estado||"Pendiente"} />
+            <div style={{flex:1}}>
+              {a.titulo&&<div style={{fontSize:13,fontWeight:500}}>{a.titulo}</div>}
+              <div style={{fontSize:13,color:"#555"}}>{a.nota}</div>
+              <div style={{fontSize:11,color:"#aaa",marginTop:2}}>{a.fecha} · <strong>{a.gestor}</strong> · <Badge color={PRIO_C[a.prioridad||"Media"]} label={a.prioridad||"Media"} /></div>
+            </div>
+          </div>;
+        })
+      }
     </Card>
   );
 }
 
-// ── IMPORTACIÓN EXCEL CLIENTES ────────────────────────────────────────────────
-function ImportExcel({ config, clients, onImport, onClose, lineaActiva }) {
-  const [preview, setPreview] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState(null);
-  const fileRef = useRef();
-  function handleFile(e) {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = evt => {
-      try {
-        const wb = XLSX.read(evt.target.result, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        const mapped = rows.map(r => {
-          const keys = Object.keys(r);
-          const get = (idx, names) => { for (const n of names) { const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase())); if (k !== undefined) return String(r[k] || "").trim(); } return String(r[keys[idx]] || "").trim(); };
-          return { nombre: get(0,["nombre","empresa"]), nif: get(1,["nif","cif"]), calle: get(2,["calle"]), numero: get(3,["numero","número"]), cp: get(4,["cp","postal"]), ciudad: get(5,["ciudad"]), pais: get(6,["pais","país"]) || "España", telefono: get(7,["telefono","teléfono"]), email: get(8,["email","mail"]), contacto: get(9,["contacto"]), canal: get(10,["canal"]), grupo: get(11,["grupo"]), gestor: get(12,["gestor"]), tipo_cliente: get(13,["tipo"]) || "Potencial", comentarios: get(14,["comentarios","comentario","notas"]), linea_negocio: get(15,["linea","línea"]) || lineaActiva };
-        }).filter(r => r.nombre);
-        setPreview(mapped); setResult(null);
-      } catch (err) { alert("Error: " + err.message); }
+// ── IMPORT CLIENTES ───────────────────────────────────────────────────────────
+function ImportExcel(props) {
+  var config=props.config,clients=props.clients,onImport=props.onImport,onClose=props.onClose,lineaActiva=props.lineaActiva;
+  var [preview,setPreview]=useState(null);
+  var [importing,setImporting]=useState(false);
+  var [result,setResult]=useState(null);
+  var fileRef=useRef();
+  function handleFile(e){
+    var file=e.target.files[0];if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(evt){
+      try{
+        var wb=XLSX.read(evt.target.result,{type:"binary"});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        var mapped=rows.map(function(r){
+          var keys=Object.keys(r);
+          function get(idx,names){
+            for(var i=0;i<names.length;i++){
+              var n=names[i];
+              var k=keys.find(function(k){return k.toLowerCase().replace(/\s+/g,"").indexOf(n.toLowerCase().replace(/\s+/g,""))>=0;});
+              if(k!==undefined&&String(r[k]||"").trim()!=="")return String(r[k]||"").trim();
+            }
+            return String(r[keys[idx]]||"").trim();
+          }
+          var lineaRaw=get(15,["linea","línea","line"]);
+          var linea=LINEAS.indexOf(lineaRaw)>=0?lineaRaw:lineaActiva;
+          return {
+            nombre:get(0,["nombre empresa","nombre","empresa"])||"",
+            nif:get(1,["nif","cif","vat"])||null,
+            calle:get(2,["calle","street"])||null,
+            numero:get(3,["numero","número"])||null,
+            cp:get(4,["cp","postal"])||null,
+            ciudad:get(5,["ciudad","city"])||null,
+            pais:get(6,["pais","país","country"])||"España",
+            telefono:get(7,["telefono","teléfono","phone","tel"])||null,
+            email:get(8,["email","mail","correo"])||null,
+            contacto:get(9,["contacto","contact"])||null,
+            canal:get(10,["canal"])||null,
+            grupo:get(11,["grupo","group"])||null,
+            gestor:get(12,["gestor","manager"])||null,
+            tipo_cliente:get(13,["tipo"])||"Potencial",
+            comentarios:get(14,["comentarios","comentario","notas"])||null,
+            linea_negocio:linea,
+          };
+        }).filter(function(r){return !!r.nombre;});
+        setPreview(mapped);setResult(null);
+      }catch(err){alert("Error: "+err.message);}
     };
     reader.readAsBinaryString(file);
   }
-  async function handleImport() {
-    if (!preview?.length) return;
+  function handleImport(){
+    if(!preview||!preview.length)return;
     setImporting(true);
-    let ok = 0, skip = 0, err = 0;
-    for (const row of preview) {
-      const existe = clients.some(c => (row.nif && normalize(c.nif) === normalize(row.nif)) || normalize(c.nombre) === normalize(row.nombre));
-      if (existe) { skip++; continue; }
-      try { await sbPost("clientes", row); ok++; } catch { err++; }
+    var ok=0,skip=0,err=0,errores=[],idx=0;
+    function next(){
+      if(idx>=preview.length){setImporting(false);setResult({ok:ok,skip:skip,err:err,errores:errores});if(ok>0)onImport();return;}
+      var row=preview[idx++];
+      var existe=clients.some(function(c){return norm(c.nombre)===norm(row.nombre);});
+      if(existe){skip++;next();return;}
+      sbPost("clientes",row).then(function(){ok++;next();}).catch(function(e){err++;errores.push(row.nombre+": "+e.message);next();});
     }
-    setImporting(false); setResult({ ok, skip, err });
-    if (ok > 0) onImport();
+    next();
   }
-  function downloadTemplate() {
-    const ws = XLSX.utils.aoa_to_sheet([
+  function downloadTemplate(){
+    var ws=XLSX.utils.aoa_to_sheet([
       ["Nombre empresa","NIF","Calle","Número","CP","Ciudad","País","Teléfono","Email","Contacto","Canal","Grupo","Gestor","Tipo(Potencial/Cliente/Inactivo)","Comentarios","Línea de negocio"],
-      ["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","34612345678","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo","Potencial","Cliente interesante","La Sin Gluten"]
+      ["Ejemplo SL","B12345678","Calle Mayor","1","08001","Barcelona","España","34612345678","info@ejemplo.com","Juan García","Digital","Norte","Rodrigo","Potencial","Comentario","La Sin Gluten"]
     ]);
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Clientes"); XLSX.writeFile(wb, "plantilla_clientes.xlsx");
+    var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Clientes");XLSX.writeFile(wb,"plantilla_clientes.xlsx");
   }
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>📥 Importar clientes</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <span style={{fontSize:15,fontWeight:600}}>📥 Importar clientes</span>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>×</button>
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
         <Btn variant="success" onClick={downloadTemplate}>⬇ Plantilla</Btn>
-        <Btn variant="primary" onClick={() => { fileRef.current.value = ""; fileRef.current.click(); }}>📂 Seleccionar archivo</Btn>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: "none" }} />
+        <Btn variant="primary" onClick={function(){fileRef.current.value="";fileRef.current.click();}}>📂 Seleccionar archivo</Btn>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{display:"none"}} />
       </div>
-      {preview && (
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} clientes</div>
-          <div style={{ overflowX: "auto", maxHeight: 200, overflowY: "auto", marginBottom: 12, border: "1px solid #eee", borderRadius: 8 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead style={{ background: "#f9f9f9", position: "sticky", top: 0 }}>
-                <tr>{["Empresa","NIF","Ciudad","Gestor","Tipo","Línea"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#555", borderBottom: "1px solid #eee" }}>{h}</th>)}</tr>
-              </thead>
-              <tbody>{preview.map((r, i) => <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
-                <td style={{ padding: "5px 8px", fontWeight: 500 }}>{r.nombre}</td>
-                <td style={{ padding: "5px 8px", color: "#888" }}>{r.nif||"—"}</td>
-                <td style={{ padding: "5px 8px", color: "#888" }}>{r.ciudad||"—"}</td>
-                <td style={{ padding: "5px 8px" }}>{r.gestor||"—"}</td>
-                <td style={{ padding: "5px 8px" }}><Badge color={r.tipo_cliente==="Cliente"?"#1d9e75":r.tipo_cliente==="Inactivo"?"#888":"#ba7517"} label={r.tipo_cliente||"Potencial"} /></td>
-                <td style={{ padding: "5px 8px" }}><Badge color={LINEA_COLORS[r.linea_negocio]||"#888"} label={r.linea_negocio||lineaActiva} /></td>
-              </tr>)}</tbody>
-            </table>
-          </div>
-          {result ? <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos · <strong>{result.err}</strong> errores</div>
-          : <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>{importing ? "Importando…" : `Importar ${preview.length} clientes`}</Btn>}
+      {preview&&<div>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Vista previa — {preview.length} clientes</div>
+        <div style={{overflowX:"auto",maxHeight:200,overflowY:"auto",marginBottom:12,border:"1px solid #eee",borderRadius:8}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead style={{background:"#f9f9f9",position:"sticky",top:0}}>
+              <tr>{["Empresa","NIF","Ciudad","Gestor","Tipo","Línea"].map(function(h){return <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee"}}>{h}</th>;})}</tr>
+            </thead>
+            <tbody>{preview.map(function(r,i){
+              return <tr key={i} style={{borderBottom:"1px solid #f5f5f5"}}>
+                <td style={{padding:"5px 8px",fontWeight:500}}>{r.nombre}</td>
+                <td style={{padding:"5px 8px",color:"#888"}}>{r.nif||"—"}</td>
+                <td style={{padding:"5px 8px",color:"#888"}}>{r.ciudad||"—"}</td>
+                <td style={{padding:"5px 8px"}}>{r.gestor||"—"}</td>
+                <td style={{padding:"5px 8px"}}><Badge color={TCLI_C[r.tipo_cliente]||"#888"} label={r.tipo_cliente||"Potencial"} /></td>
+                <td style={{padding:"5px 8px"}}><Badge color={LINEA_COLOR[r.linea_negocio]||"#888"} label={r.linea_negocio||lineaActiva} /></td>
+              </tr>;
+            })}</tbody>
+          </table>
         </div>
-      )}
+        {result
+          ?<div style={{padding:"10px 14px",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,fontSize:13}}>
+              ✅ <strong>{result.ok}</strong> importados · <strong>{result.skip}</strong> omitidos · <strong>{result.err}</strong> errores
+              {result.errores&&result.errores.length>0&&<div style={{marginTop:8,maxHeight:100,overflowY:"auto",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:6,padding:"6px 10px"}}>
+                {result.errores.map(function(e,i){return <div key={i} style={{fontSize:11,color:"#b91c1c",marginBottom:2}}>⚠️ {e}</div>;})}
+              </div>}
+            </div>
+          :<Btn variant="primary" onClick={handleImport} disabled={importing} style={{width:"100%"}}>{importing?"Importando…":"Importar "+preview.length+" clientes"}</Btn>
+        }
+      </div>}
     </Card>
   );
 }
 
-// ── IMPORTACIÓN VENTAS ────────────────────────────────────────────────────────
-function ImportVentas({ clients, onImport, onClose }) {
-  const [preview, setPreview] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState(null);
-  const [delMes, setDelMes] = useState(String(currMonth));
-  const [delAnio, setDelAnio] = useState(String(currYear));
-  const [deleting, setDeleting] = useState(false);
-  const fileRef = useRef();
-
-  async function borrarMes() {
-    if (!confirm(`¿Borrar TODAS las ventas de ${MESES[parseInt(delMes)-1]} ${delAnio}?`)) return;
+// ── IMPORT VENTAS ─────────────────────────────────────────────────────────────
+function ImportVentas(props) {
+  var clients=props.clients,onImport=props.onImport,onClose=props.onClose;
+  var [preview,setPreview]=useState(null);
+  var [importing,setImporting]=useState(false);
+  var [result,setResult]=useState(null);
+  var [delMes,setDelMes]=useState(String(CM));
+  var [delAnio,setDelAnio]=useState(String(CY));
+  var [deleting,setDeleting]=useState(false);
+  var fileRef=useRef();
+  function borrarMes(){
+    if(!confirm("¿Borrar TODAS las ventas de "+MESES[parseInt(delMes)-1]+" "+delAnio+"?"))return;
     setDeleting(true);
-    try { await sbDeleteWhere("ventas", `mes=eq.${delMes}&anio=eq.${delAnio}`); alert(`✅ Ventas de ${MESES[parseInt(delMes)-1]} ${delAnio} eliminadas.`); onImport(); }
-    catch (e) { alert("Error: " + e.message); }
-    finally { setDeleting(false); }
+    sbDelWhere("ventas","mes=eq."+delMes+"&anio=eq."+delAnio).then(function(){alert("✅ Ventas eliminadas.");onImport();setDeleting(false);}).catch(function(e){alert("Error: "+e.message);setDeleting(false);});
   }
-
-  function handleFile(e) {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = evt => {
-      try {
-        const wb = XLSX.read(evt.target.result, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        const mapped = rows.map(r => {
-          const keys = Object.keys(r);
-          const get = (idx, names) => { for (const n of names) { const k = keys.find(k => k.toLowerCase().includes(n.toLowerCase())); if (k !== undefined) return r[k]; } return r[keys[idx]]; };
-          const codCliente = String(get(0,["codigo cliente","código cliente"]) || "").trim();
-          const cliente = clients.find(c => c.codigo === codCliente);
-          return { codigo_cliente: codCliente, cliente_id: cliente?.id || null, cliente_nombre: cliente?.nombre || codCliente, codigo_producto: String(get(1,["codigo producto","código producto"]) || "").trim(), denominacion: String(get(2,["denominacion","denominación","producto"]) || "").trim(), unidades: parseFloat(get(3,["unidades","cantidad"]) || 0), precio_unidad: parseFloat(get(4,["precio","precio unidad"]) || 0), venta_neta: parseFloat(get(5,["venta neta","venta_neta","importe"]) || 0), mes: parseInt(get(6,["mes","month"]) || currMonth), anio: parseInt(get(7,["año","anio","year"]) || currYear), gestor: cliente?.gestor || "", linea_negocio: cliente?.linea_negocio || "La Sin Gluten" };
-        }).filter(r => r.codigo_cliente || r.denominacion);
-        setPreview(mapped); setResult(null);
-      } catch (err) { alert("Error: " + err.message); }
+  function handleFile(e){
+    var file=e.target.files[0];if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(evt){
+      try{
+        var wb=XLSX.read(evt.target.result,{type:"binary"});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        var mapped=rows.map(function(r){
+          var keys=Object.keys(r);
+          function get(idx,names){for(var i=0;i<names.length;i++){var n=names[i];var k=keys.find(function(k){return k.toLowerCase().replace(/\s+/g,"").indexOf(n.toLowerCase().replace(/\s+/g,""))>=0;});if(k!==undefined)return r[k];}return r[keys[idx]];}
+          var codCliente=String(get(0,["codigo cliente","código cliente"])||"").trim();
+          var cliente=clients.find(function(c){return c.codigo===codCliente;});
+          return {codigo_cliente:codCliente,cliente_id:cliente?cliente.id:null,cliente_nombre:cliente?cliente.nombre:codCliente,codigo_producto:String(get(1,["codigo producto","código producto"])||"").trim(),denominacion:String(get(2,["denominacion","denominación","producto"])||"").trim(),unidades:parseFloat(get(3,["unidades","cantidad"])||0),precio_unidad:parseFloat(get(4,["precio","precio unidad"])||0),venta_neta:parseFloat(get(5,["venta neta","venta_neta","importe","total"])||0),mes:parseInt(get(6,["mes","month"])||CM),anio:parseInt(get(7,["año","anio","year"])||CY),gestor:cliente?cliente.gestor:"",linea_negocio:cliente?cliente.linea_negocio:"La Sin Gluten"};
+        }).filter(function(r){return r.codigo_cliente||r.denominacion;});
+        setPreview(mapped);setResult(null);
+      }catch(err){alert("Error: "+err.message);}
     };
     reader.readAsBinaryString(file);
   }
-  async function handleImport() {
-    if (!preview?.length) return;
+  function handleImport(){
+    if(!preview||!preview.length)return;
     setImporting(true);
-    let ok = 0, err = 0;
-    for (const row of preview) {
-      try { await sbPost("ventas", { cliente_id: row.cliente_id, codigo_cliente: row.codigo_cliente, codigo_producto: row.codigo_producto, denominacion: row.denominacion, unidades: row.unidades, precio_unidad: row.precio_unidad, venta_neta: row.venta_neta, mes: row.mes, anio: row.anio, gestor: row.gestor, linea_negocio: row.linea_negocio }); ok++; }
-      catch { err++; }
+    var ok=0,err=0,idx=0;
+    function next(){
+      if(idx>=preview.length){setImporting(false);setResult({ok:ok,err:err});if(ok>0)onImport();return;}
+      var row=preview[idx++];
+      sbPost("ventas",{cliente_id:row.cliente_id,codigo_cliente:row.codigo_cliente,codigo_producto:row.codigo_producto,denominacion:row.denominacion,unidades:row.unidades,precio_unidad:row.precio_unidad,venta_neta:row.venta_neta,mes:row.mes,anio:row.anio,gestor:row.gestor,linea_negocio:row.linea_negocio}).then(function(){ok++;next();}).catch(function(){err++;next();});
     }
-    setImporting(false); setResult({ ok, err });
-    if (ok > 0) onImport();
+    next();
   }
-  function downloadTemplate() {
-    const ws = XLSX.utils.aoa_to_sheet([["Código Cliente","Código Producto","Denominación Producto","Unidades","Precio por Unidad","Venta Neta","Mes","Año"],["CL000001","PROD001","Pan Sin Gluten 500g","100","3.50","350","4","2026"]]);
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Ventas"); XLSX.writeFile(wb, "plantilla_ventas.xlsx");
+  function downloadTemplate(){
+    var ws=XLSX.utils.aoa_to_sheet([["Código Cliente","Código Producto","Denominación Producto","Unidades","Precio por Unidad","Venta Neta","Mes","Año"],["CL000001","PROD001","Pan Sin Gluten 500g","100","3.50","350","4","2026"]]);
+    var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Ventas");XLSX.writeFile(wb,"plantilla_ventas.xlsx");
   }
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>📊 Importar / Gestionar ventas</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>×</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <span style={{fontSize:15,fontWeight:600}}>📊 Importar / Gestionar ventas</span>
+        <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>×</button>
       </div>
-      <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "1rem", marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#b91c1c", marginBottom: 10 }}>🗑️ Borrar ventas de un mes/año</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 120 }}><Sel value={delMes} onChange={setDelMes} options={MESES.map((_,i) => String(i+1))} /></div>
-          <div style={{ flex: 1, minWidth: 100 }}><Sel value={delAnio} onChange={setDelAnio} options={ANIOS} /></div>
-          <Btn variant="danger" onClick={borrarMes} disabled={deleting}>{deleting ? "Borrando…" : "Borrar mes"}</Btn>
+      <div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:10,padding:"1rem",marginBottom:16}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#b91c1c",marginBottom:10}}>🗑️ Borrar ventas de un mes/año</div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:120}}><Sel value={delMes} onChange={setDelMes} options={MESES.map(function(_,i){return String(i+1);})} /></div>
+          <div style={{flex:1,minWidth:100}}><Sel value={delAnio} onChange={setDelAnio} options={ANIOS} /></div>
+          <Btn variant="danger" onClick={borrarMes} disabled={deleting}>{deleting?"Borrando…":"Borrar mes"}</Btn>
         </div>
-        <div style={{ fontSize: 11, color: "#888", marginTop: 8 }}>Usa esto antes de reimportar un mes corregido.</div>
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
         <Btn variant="success" onClick={downloadTemplate}>⬇ Plantilla</Btn>
-        <Btn variant="primary" onClick={() => { fileRef.current.value = ""; fileRef.current.click(); }}>📂 Seleccionar archivo</Btn>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: "none" }} />
+        <Btn variant="primary" onClick={function(){fileRef.current.value="";fileRef.current.click();}}>📂 Seleccionar archivo</Btn>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{display:"none"}} />
       </div>
-      {preview && (
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Vista previa — {preview.length} líneas</div>
-          <div style={{ overflowX: "auto", maxHeight: 200, overflowY: "auto", marginBottom: 12, border: "1px solid #eee", borderRadius: 8 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead style={{ background: "#f9f9f9", position: "sticky", top: 0 }}>
-                <tr>{["Cód.Cliente","Cliente","Producto","Uds","Venta Neta","Mes/Año"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600, color: "#555", borderBottom: "1px solid #eee" }}>{h}</th>)}</tr>
-              </thead>
-              <tbody>{preview.map((r, i) => <tr key={i} style={{ borderBottom: "1px solid #f5f5f5" }}>
-                <td style={{ padding: "5px 8px", fontFamily: "monospace", fontSize: 11 }}>{r.codigo_cliente}</td>
-                <td style={{ padding: "5px 8px", fontWeight: 500 }}>{r.cliente_nombre}</td>
-                <td style={{ padding: "5px 8px" }}>{r.denominacion}</td>
-                <td style={{ padding: "5px 8px", textAlign: "right" }}>{r.unidades}</td>
-                <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 600, color: "#1d9e75" }}>€{r.venta_neta?.toFixed(2)}</td>
-                <td style={{ padding: "5px 8px", color: "#888" }}>{MESES[(r.mes||1)-1]?.slice(0,3)} {r.anio}</td>
-              </tr>)}</tbody>
-            </table>
-          </div>
-          {result ? <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, fontSize: 13 }}>✅ <strong>{result.ok}</strong> importadas · <strong>{result.err}</strong> errores</div>
-          : <Btn variant="primary" onClick={handleImport} disabled={importing} style={{ width: "100%" }}>{importing ? "Importando…" : `Importar ${preview.length} líneas`}</Btn>}
+      {preview&&<div>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Vista previa — {preview.length} líneas</div>
+        <div style={{overflowX:"auto",maxHeight:200,overflowY:"auto",marginBottom:12,border:"1px solid #eee",borderRadius:8}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead style={{background:"#f9f9f9",position:"sticky",top:0}}>
+              <tr>{["Cód.Cliente","Cliente","Producto","Uds","Venta Neta","Mes/Año"].map(function(h){return <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee"}}>{h}</th>;})}</tr>
+            </thead>
+            <tbody>{preview.map(function(r,i){
+              return <tr key={i} style={{borderBottom:"1px solid #f5f5f5"}}>
+                <td style={{padding:"5px 8px",fontFamily:"monospace",fontSize:11}}>{r.codigo_cliente}</td>
+                <td style={{padding:"5px 8px",fontWeight:500}}>{r.cliente_nombre}</td>
+                <td style={{padding:"5px 8px"}}>{r.denominacion}</td>
+                <td style={{padding:"5px 8px",textAlign:"right"}}>{r.unidades}</td>
+                <td style={{padding:"5px 8px",textAlign:"right",fontWeight:600,color:"#1d9e75"}}>{(r.venta_neta||0).toFixed(2)}</td>
+                <td style={{padding:"5px 8px",color:"#888"}}>{(MESES[(r.mes||1)-1]||"").slice(0,3)} {r.anio}</td>
+              </tr>;
+            })}</tbody>
+          </table>
         </div>
-      )}
+        {result
+          ?<div style={{padding:"10px 14px",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,fontSize:13}}>✅ <strong>{result.ok}</strong> importadas · <strong>{result.err}</strong> errores</div>
+          :<Btn variant="primary" onClick={handleImport} disabled={importing} style={{width:"100%"}}>{importing?"Importando…":"Importar "+preview.length+" líneas"}</Btn>
+        }
+      </div>}
     </Card>
   );
 }
 
 // ── GRÁFICO ───────────────────────────────────────────────────────────────────
-function VentasChart({ data }) {
-  const canvasRef = useRef();
-  const chartRef = useRef();
-  useEffect(() => {
-    if (!data.length) return;
-    if (chartRef.current) chartRef.current.destroy();
-    const labels = [...new Set(data.map(d => d.label))];
-    const totals = labels.map(l => data.filter(d => d.label === l).reduce((s, d) => s + (d.venta_neta || 0), 0));
-    chartRef.current = new Chart(canvasRef.current, {
-      type: "bar",
-      data: { labels, datasets: [{ label: "Venta Neta (€)", data: totals, backgroundColor: "#8ecfd488", borderColor: "#5bb5bc", borderWidth: 2, borderRadius: 6 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `€ ${ctx.raw.toLocaleString("es-ES", { minimumFractionDigits: 2 })}` } } }, scales: { y: { ticks: { callback: v => `€${v.toLocaleString("es-ES")}` } } } }
-    });
-    return () => { if (chartRef.current) chartRef.current.destroy(); };
-  }, [data]);
-  if (!data.length) return <div style={{ textAlign: "center", color: "#aaa", padding: "2rem", fontSize: 13 }}>Sin datos.</div>;
-  return <div style={{ height: 280, position: "relative" }}><canvas ref={canvasRef} /></div>;
+function VentasChart(props) {
+  var data=props.data||[];
+  var canvasRef=useRef(),chartRef=useRef();
+  useEffect(function(){
+    if(!data.length)return;
+    if(chartRef.current)chartRef.current.destroy();
+    var labels=[];data.forEach(function(d){if(labels.indexOf(d.label)<0)labels.push(d.label);});
+    var totals=labels.map(function(l){return data.filter(function(d){return d.label===l;}).reduce(function(s,d){return s+(d.venta_neta||0);},0);});
+    chartRef.current=new Chart(canvasRef.current,{type:"bar",data:{labels:labels,datasets:[{label:"Venta Neta (€)",data:totals,backgroundColor:"#8ecfd488",borderColor:"#5bb5bc",borderWidth:2,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return "€ "+ctx.raw.toLocaleString("es-ES",{minimumFractionDigits:2});}}}},scales:{y:{ticks:{callback:function(v){return "€"+v.toLocaleString("es-ES");}}}}}});
+    return function(){if(chartRef.current)chartRef.current.destroy();};
+  },[data]);
+  if(!data.length)return <div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>Sin datos.</div>;
+  return <div style={{height:280,position:"relative"}}><canvas ref={canvasRef} /></div>;
 }
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
-  const [currentUser, setCurrentUser] = useState(() => { try { const s = sessionStorage.getItem("crm_session"); return s ? JSON.parse(s) : null; } catch { return null; } });
-  const [lineaActiva, setLineaActiva] = useState(() => { try { const s = sessionStorage.getItem("crm_session"); return s ? JSON.parse(s).lineaActiva : "La Sin Gluten"; } catch { return "La Sin Gluten"; } });
-  const [tab, setTab] = useState("Dashboard");
-  const [config, setConfigState] = useState({ canales: [], grupos: [], gestores: [] });
-  const [clients, setClients] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [ventas, setVentas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [clientPanel, setClientPanel] = useState(null);
-  const [detalleId, setDetalleId] = useState(null);
-  const [actPanel, setActPanel] = useState(null);
-  const [showImportCli, setShowImportCli] = useState(false);
-  const [showImportVen, setShowImportVen] = useState(false);
-  const [filter, setFilter] = useState({ canal: "", grupo: "", gestor: "", tipo_cliente: "" });
-  const [actFiltro, setActFiltro] = useState({ gestor: "", estado: "", tipo: "" });
-  const [dashGestor, setDashGestor] = useState("");
-  const [ventasFiltro, setVentasFiltro] = useState({ canal: "", gestor: "", grupo: "", mes: "", anio: String(currYear), groupBy: "mes" });
-  const [newVal, setNewVal] = useState({ canal: "", grupo: "", gestor: "" });
+  var sesion=null;
+  try{var s=sessionStorage.getItem("crm_session");if(s)sesion=JSON.parse(s);}catch(e){}
 
-  const clientName = id => clients.find(c => c.id === id)?.nombre || "—";
+  var [currentUser,setCurrentUser]=useState(sesion);
+  var [lineaActiva,setLineaActiva]=useState(sesion?sesion.lineaActiva:"La Sin Gluten");
+  var [tab,setTab]=useState("Dashboard");
+  var [config,setConfigState]=useState({canales:[],grupos:[],gestores:[]});
+  var [clients,setClients]=useState([]);
+  var [activities,setActivities]=useState([]);
+  var [ventas,setVentas]=useState([]);
+  var [loading,setLoading]=useState(true);
+  var [error,setError]=useState(null);
+  var [saving,setSaving]=useState(false);
+  var [clientPanel,setClientPanel]=useState(null);
+  var [detalleId,setDetalleId]=useState(null);
+  var [actPanel,setActPanel]=useState(null);
+  var [showImportCli,setShowImportCli]=useState(false);
+  var [showImportVen,setShowImportVen]=useState(false);
+  var [busqueda,setBusqueda]=useState("");
+  var [pagina,setPagina]=useState(1);
+  var [filter,setFilter]=useState({canal:"",grupo:"",gestor:"",tipo_cliente:""});
+  var [actFiltro,setActFiltro]=useState({gestor:"",estado:"",tipo:""});
+  var [dashGestor,setDashGestor]=useState("");
+  var [ventasFiltro,setVentasFiltro]=useState({canal:"",gestor:"",grupo:"",mes:"",anio:String(CY),groupBy:"mes"});
+  var [newVal,setNewVal]=useState({canal:"",grupo:"",gestor:""});
 
-  // Filtrar por línea activa
-  const clientsFiltLinea    = useMemo(() => clients.filter(c => c.linea_negocio === lineaActiva), [clients, lineaActiva]);
-  const activitiesFiltLinea = useMemo(() => activities.filter(a => a.linea_negocio === lineaActiva), [activities, lineaActiva]);
-  const ventasFiltLinea     = useMemo(() => ventas.filter(v => v.linea_negocio === lineaActiva), [ventas, lineaActiva]);
+  function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
 
-  const loadAll = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const [cfgRows, cls, acts, vts] = await Promise.all([
-        sbGet("config", "select=clave,valor"),
-        sbGet("clientes", "select=*&order=nombre.asc"),
-        sbGet("actividades", "select=*&order=fecha.desc"),
-        sbGet("ventas", "select=*&order=anio.desc,mes.desc"),
-      ]);
-      const cfg = { canales: [], grupos: [], gestores: [] };
-      cfgRows.forEach(r => { if (r.clave==="canales") cfg.canales=r.valor; if (r.clave==="grupos") cfg.grupos=r.valor; if (r.clave==="gestores") cfg.gestores=r.valor; });
-      setConfigState(cfg); setClients(cls); setActivities(acts); setVentas(vts);
-    } catch (e) { setError("No se pudo conectar. " + e.message); }
-    finally { setLoading(false); }
-  }, []);
+  var clientsFiltLinea=useMemo(function(){return clients.filter(function(c){return c.linea_negocio===lineaActiva;});},[clients,lineaActiva]);
+  var activitiesFiltLinea=useMemo(function(){return activities.filter(function(a){return a.linea_negocio===lineaActiva;});},[activities,lineaActiva]);
+  var ventasFiltLinea=useMemo(function(){return ventas.filter(function(v){return v.linea_negocio===lineaActiva;});},[ventas,lineaActiva]);
 
-  useEffect(() => { if (currentUser) loadAll(); }, [currentUser, loadAll]);
+  var loadAll=useCallback(function(){
+    setLoading(true);setError(null);
+    Promise.all([
+      sbGet("config","select=clave,valor"),
+      sbGet("clientes","select=*&order=nombre.asc"),
+      sbGet("actividades","select=*&order=fecha.desc"),
+      sbGet("ventas","select=*&order=anio.desc,mes.desc"),
+    ]).then(function(results){
+      var cfgRows=results[0],cls=results[1],acts=results[2],vts=results[3];
+      var cfg={canales:[],grupos:[],gestores:[]};
+      cfgRows.forEach(function(r){if(r.clave==="canales")cfg.canales=r.valor;if(r.clave==="grupos")cfg.grupos=r.valor;if(r.clave==="gestores")cfg.gestores=r.valor;});
+      setConfigState(cfg);setClients(cls);setActivities(acts);setVentas(vts);setLoading(false);
+    }).catch(function(e){setError("No se pudo conectar. "+e.message);setLoading(false);});
+  },[]);
 
-  useEffect(() => {
-    if (currentUser && config.gestores.includes(currentUser.nombre)) {
-      setDashGestor(currentUser.nombre);
-      setActFiltro(f => ({ ...f, gestor: currentUser.nombre }));
-      setVentasFiltro(f => ({ ...f, gestor: currentUser.nombre }));
-    }
-  }, [currentUser, config.gestores]);
-
-  function handleLogin(u) { sessionStorage.setItem("crm_session", JSON.stringify(u)); setCurrentUser(u); setLineaActiva(u.lineaActiva); }
-  function handleLogout() { sessionStorage.removeItem("crm_session"); setCurrentUser(null); }
-  function cambiarLinea(l) {
-    setLineaActiva(l);
-    const u = { ...currentUser, lineaActiva: l };
-    setCurrentUser(u);
-    sessionStorage.setItem("crm_session", JSON.stringify(u));
-    setDetalleId(null); setClientPanel(null); setActPanel(null);
-  }
-
-  async function saveConfig(key, arr) {
-    const rows = await sbGet("config", `clave=eq.${key}&select=id`);
-    if (rows.length) await sbPatch("config", rows[0].id, { valor: arr });
-    else await sbPost("config", { clave: key, valor: arr });
-    setConfigState(prev => ({ ...prev, [key]: arr }));
-  }
-  async function saveClient(form) {
-    setSaving(true);
-    try {
-      const body = { nombre: form.nombre, nif: form.nif, calle: form.calle, numero: form.numero, cp: form.cp, ciudad: form.ciudad, pais: form.pais, telefono: form.telefono, email: form.email, contacto: form.contacto, canal: form.canal, grupo: form.grupo, gestor: form.gestor, tipo_cliente: form.tipo_cliente || "Potencial", comentarios: form.comentarios || "", linea_negocio: form.linea_negocio || lineaActiva };
-      if (form.id) { await sbPatch("clientes", form.id, body); }
-      else {
-        const allCodes = clients.map(c => c.codigo).filter(Boolean);
-        const maxNum = allCodes.length ? Math.max(...allCodes.map(c => parseInt(c.replace("CL","")) || 0)) : 0;
-        body.codigo = "CL" + String(maxNum + 1).padStart(6, "0");
-        await sbPost("clientes", body);
+  useEffect(function(){if(currentUser)loadAll();},[currentUser]);
+  useEffect(function(){
+    if(currentUser&&config.gestores.length){
+      if(config.gestores.indexOf(currentUser.nombre)>=0){
+        setDashGestor(currentUser.nombre);
+        setActFiltro(function(f){return Object.assign({},f,{gestor:currentUser.nombre});});
+        setVentasFiltro(function(f){return Object.assign({},f,{gestor:currentUser.nombre});});
       }
-      await loadAll(); setClientPanel(null);
-    } catch (e) { alert("Error: " + e.message); }
-    finally { setSaving(false); }
+    }
+  },[currentUser,config.gestores.length]);
+
+  function handleLogin(u){sessionStorage.setItem("crm_session",JSON.stringify(u));setCurrentUser(u);setLineaActiva(u.lineaActiva);}
+  function handleLogout(){sessionStorage.removeItem("crm_session");setCurrentUser(null);}
+  function cambiarLinea(l){
+    setLineaActiva(l);
+    var u=Object.assign({},currentUser,{lineaActiva:l});
+    setCurrentUser(u);sessionStorage.setItem("crm_session",JSON.stringify(u));
+    setDetalleId(null);setClientPanel(null);setActPanel(null);setBusqueda("");setPagina(1);
   }
-  async function deleteClient(id) {
-    if (!confirm("¿Eliminar este cliente?")) return;
-    try { await sbDelete("clientes", id); await loadAll(); setDetalleId(null); }
-    catch (e) { alert("Error: " + e.message); }
+
+  function saveConfig(key,arr){
+    return sbGet("config","clave=eq."+key+"&select=id").then(function(rows){
+      if(rows.length)return sbPatch("config",rows[0].id,{valor:arr});
+      else return sbPost("config",{clave:key,valor:arr});
+    }).then(function(){setConfigState(function(prev){return Object.assign({},prev,{[key]:arr});});});
   }
-  async function saveActivity(form) {
+
+  function saveClient(form,contactos){
     setSaving(true);
-    try {
-      const body = { cliente_id: form.clienteId, tipo: form.tipo, titulo: form.titulo || "", nota: form.nota, fecha: form.fecha, gestor: form.gestor, estado: form.estado || "Pendiente", prioridad: form.prioridad || "Media", linea_negocio: form.linea_negocio || lineaActiva };
-      if (form.id) await sbPatch("actividades", form.id, body);
-      else await sbPost("actividades", body);
-      await loadAll(); setActPanel(null);
-    } catch (e) { alert("Error: " + e.message); }
-    finally { setSaving(false); }
-  }
-  async function deleteActivity(id) {
-    try { await sbDelete("actividades", id); setActivities(p => p.filter(a => a.id !== id)); }
-    catch (e) { alert("Error: " + e.message); }
+    var body={nombre:form.nombre,nif:form.nif||null,calle:form.calle||null,numero:form.numero||null,cp:form.cp||null,ciudad:form.ciudad||null,pais:form.pais||"España",telefono:form.telefono||null,email:form.email||null,contacto:form.contacto||null,canal:form.canal||null,grupo:form.grupo||null,gestor:form.gestor||null,tipo_cliente:form.tipo_cliente||"Potencial",comentarios:form.comentarios||null,linea_negocio:form.linea_negocio||lineaActiva};
+    var p;
+    if(form.id){p=sbPatch("clientes",form.id,body);}
+    else{
+      var allCodes=clients.map(function(c){return c.codigo;}).filter(Boolean);
+      var maxNum=allCodes.length?Math.max.apply(null,allCodes.map(function(c){return parseInt(c.replace("CL",""))||0;})):0;
+      body.codigo="CL"+String(maxNum+1).padStart(6,"0");
+      p=sbPost("clientes",body);
+    }
+    p.then(function(saved){
+      var clienteId=Array.isArray(saved)?saved[0].id:saved.id;
+      if(!clienteId&&form.id)clienteId=form.id;
+      // Guardar contactos: borrar los existentes y recrear
+      return sbDelWhere("contactos","cliente_id=eq."+clienteId).then(function(){
+        var validos=contactos.filter(function(c){return (c.nombre||"").trim();});
+        if(!validos.length)return;
+        var idx=0;
+        function nextC(){
+          if(idx>=validos.length)return;
+          var c=validos[idx++];
+          sbPost("contactos",{cliente_id:clienteId,nombre:c.nombre,telefono:c.telefono||null,email:c.email||null,sector:c.sector||null}).then(nextC).catch(nextC);
+        }
+        nextC();
+      });
+    }).then(function(){return loadAll();}).then(function(){setClientPanel(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
 
-  const filteredClients = useMemo(() => clientsFiltLinea.filter(c =>
-    (!filter.canal || c.canal === filter.canal) &&
-    (!filter.grupo || c.grupo === filter.grupo) &&
-    (!filter.gestor || c.gestor === filter.gestor) &&
-    (!filter.tipo_cliente || c.tipo_cliente === filter.tipo_cliente)
-  ), [clientsFiltLinea, filter]);
+  function deleteClient(id){
+    if(!confirm("¿Eliminar este cliente?"))return;
+    sbDel("clientes",id).then(function(){return loadAll();}).then(function(){setDetalleId(null);}).catch(function(e){alert("Error: "+e.message);});
+  }
 
-  const ventasFilt = useMemo(() => ventasFiltLinea.filter(v => {
-    const cliente = clients.find(c => c.id === v.cliente_id);
-    if (ventasFiltro.canal && cliente?.canal !== ventasFiltro.canal) return false;
-    if (ventasFiltro.grupo && cliente?.grupo !== ventasFiltro.grupo) return false;
-    if (ventasFiltro.gestor && v.gestor !== ventasFiltro.gestor) return false;
-    if (ventasFiltro.mes && String(v.mes) !== ventasFiltro.mes) return false;
-    if (ventasFiltro.anio && String(v.anio) !== ventasFiltro.anio) return false;
+  function saveActivity(form){
+    setSaving(true);
+    var body={cliente_id:form.clienteId,tipo:form.tipo,titulo:form.titulo||"",nota:form.nota,fecha:form.fecha,gestor:form.gestor,estado:form.estado||"Pendiente",prioridad:form.prioridad||"Media",linea_negocio:form.linea_negocio||lineaActiva};
+    var p=form.id?sbPatch("actividades",form.id,body):sbPost("actividades",body);
+    p.then(function(){return loadAll();}).then(function(){setActPanel(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
+  }
+  function deleteActivity(id){
+    sbDel("actividades",id).then(function(){setActivities(function(prev){return prev.filter(function(a){return a.id!==id;});});}).catch(function(e){alert("Error: "+e.message);});
+  }
+
+  // Clientes filtrados con búsqueda
+  var filteredClients=useMemo(function(){
+    var q=norm(busqueda);
+    return clientsFiltLinea.filter(function(c){
+      if(filter.canal&&c.canal!==filter.canal)return false;
+      if(filter.grupo&&c.grupo!==filter.grupo)return false;
+      if(filter.gestor&&c.gestor!==filter.gestor)return false;
+      if(filter.tipo_cliente&&c.tipo_cliente!==filter.tipo_cliente)return false;
+      if(q){
+        return norm(c.nombre).indexOf(q)>=0||norm(c.nif||"").indexOf(q)>=0||norm(c.ciudad||"").indexOf(q)>=0||norm(c.gestor||"").indexOf(q)>=0||norm(c.contacto||"").indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0;
+      }
+      return true;
+    });
+  },[clientsFiltLinea,filter,busqueda]);
+
+  // Reset página al cambiar filtros/búsqueda
+  useEffect(function(){setPagina(1);},[busqueda,filter,lineaActiva]);
+
+  var totalFiltrados=filteredClients.length;
+  var clientesPagina=filteredClients.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
+
+  var ventasFilt=useMemo(function(){return ventasFiltLinea.filter(function(v){
+    var cliente=clients.find(function(c){return c.id===v.cliente_id;});
+    if(ventasFiltro.canal&&(!cliente||cliente.canal!==ventasFiltro.canal))return false;
+    if(ventasFiltro.grupo&&(!cliente||cliente.grupo!==ventasFiltro.grupo))return false;
+    if(ventasFiltro.gestor&&v.gestor!==ventasFiltro.gestor)return false;
+    if(ventasFiltro.mes&&String(v.mes)!==ventasFiltro.mes)return false;
+    if(ventasFiltro.anio&&String(v.anio)!==ventasFiltro.anio)return false;
     return true;
-  }), [ventasFiltLinea, ventasFiltro, clients]);
+  });},[ventasFiltLinea,ventasFiltro,clients]);
 
-  const ventasChart = useMemo(() => {
-    if (ventasFiltro.groupBy === "gestor")  return ventasFilt.map(v => ({ ...v, label: v.gestor || "Sin gestor" }));
-    if (ventasFiltro.groupBy === "canal")   return ventasFilt.map(v => ({ ...v, label: clients.find(c => c.id === v.cliente_id)?.canal || "Sin canal" }));
-    if (ventasFiltro.groupBy === "cliente") return ventasFilt.map(v => ({ ...v, label: clientName(v.cliente_id) }));
-    return ventasFilt.map(v => ({ ...v, label: `${MESES[(v.mes||1)-1].slice(0,3)} ${v.anio}` }));
-  }, [ventasFilt, ventasFiltro.groupBy]);
+  var ventasChart=useMemo(function(){
+    if(ventasFiltro.groupBy==="gestor")return ventasFilt.map(function(v){return Object.assign({},v,{label:v.gestor||"Sin gestor"});});
+    if(ventasFiltro.groupBy==="canal"){return ventasFilt.map(function(v){var c=clients.find(function(x){return x.id===v.cliente_id;});return Object.assign({},v,{label:c?c.canal:"Sin canal"});});}
+    if(ventasFiltro.groupBy==="cliente")return ventasFilt.map(function(v){return Object.assign({},v,{label:clientName(v.cliente_id)});});
+    return ventasFilt.map(function(v){return Object.assign({},v,{label:(MESES[(v.mes||1)-1]||"").slice(0,3)+" "+v.anio});});
+  },[ventasFilt,ventasFiltro.groupBy]);
 
-  if (!currentUser) return <Login onLogin={handleLogin} />;
+  if(!currentUser)return <Login onLogin={handleLogin} />;
 
-  const linColor = LINEA_COLORS[lineaActiva] || "#5bb5bc";
-  const linGrad  = lineaActiva === "Bauer Lemans"
-    ? "linear-gradient(135deg, #c0392b 0%, #922b21 100%)"
-    : "linear-gradient(135deg, #8ecfd4 0%, #5bb5bc 100%)";
+  var linColor=LINEA_COLOR[lineaActiva]||"#5bb5bc";
+  var linGrad=LINEA_GRAD[lineaActiva]||LINEA_GRAD["La Sin Gluten"];
+  var linLogo=LINEA_LOGO[lineaActiva]||LINEA_LOGO["La Sin Gluten"];
 
-  // ── TABS ──────────────────────────────────────────────────────────────────
-  function Dashboard() {
-    const totalClientes  = clientsFiltLinea.filter(c => c.tipo_cliente === "Cliente"   && (!dashGestor || c.gestor === dashGestor)).length;
-    const totalPotencial = clientsFiltLinea.filter(c => c.tipo_cliente === "Potencial" && (!dashGestor || c.gestor === dashGestor)).length;
-    const totalActivos   = totalClientes + totalPotencial;
-    const pctCliente     = totalActivos ? Math.round((totalClientes / totalActivos) * 100) : 0;
-    const actsPend       = activitiesFiltLinea.filter(a => (!dashGestor || a.gestor === dashGestor) && a.estado !== "Completada");
-    const totalVentaMes  = ventasFiltLinea.filter(v => v.mes === currMonth && v.anio === currYear && (!dashGestor || v.gestor === dashGestor)).reduce((s, v) => s + (v.venta_neta || 0), 0);
+  function Dashboard(){
+    var totalC=clientsFiltLinea.filter(function(c){return c.tipo_cliente==="Cliente"&&(!dashGestor||c.gestor===dashGestor);}).length;
+    var totalP=clientsFiltLinea.filter(function(c){return c.tipo_cliente==="Potencial"&&(!dashGestor||c.gestor===dashGestor);}).length;
+    var totalA=totalC+totalP;
+    var pct=totalA?Math.round(totalC/totalA*100):0;
+    var actsPend=activitiesFiltLinea.filter(function(a){return(!dashGestor||a.gestor===dashGestor)&&a.estado!=="Completada";});
+    var vtaMes=ventasFiltLinea.filter(function(v){return v.mes===CM&&v.anio===CY&&(!dashGestor||v.gestor===dashGestor);}).reduce(function(s,v){return s+(v.venta_neta||0);},0);
     return <div>
       <NotifBanner activities={activitiesFiltLinea} clients={clientsFiltLinea} filterGestor={dashGestor} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-        <div style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>Ver dashboard de:</div>
-        <div style={{ width: 200 }}><Sel value={dashGestor} onChange={setDashGestor} options={config.gestores} placeholder="Todos los gestores" /></div>
-        {dashGestor && <Btn onClick={() => setDashGestor("")}>Ver todos</Btn>}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+        <div style={{fontSize:13,color:"#555",fontWeight:500}}>Ver dashboard de:</div>
+        <div style={{width:200}}><Sel value={dashGestor} onChange={setDashGestor} options={config.gestores} placeholder="Todos los gestores" /></div>
+        {dashGestor&&<Btn onClick={function(){setDashGestor("");}}>Ver todos</Btn>}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
-        {[
-          ["Clientes activos", totalClientes, "#1d9e75", `${pctCliente}% del total activo`],
-          ["Potenciales", totalPotencial, "#ba7517", `${100-pctCliente}% del total activo`],
-          ["Actividades pend.", actsPend.length, "#378add", ""],
-          [`Venta ${MESES[currMonth-1]}`, `€${totalVentaMes.toLocaleString("es-ES",{minimumFractionDigits:2})}`, "#7f77dd", ""]
-        ].map(([l, v, c, sub]) => (
-          <div key={l} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 10, padding: "1rem", textAlign: "center" }}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>{l}</div>
-            <div style={{ fontSize: typeof v === "string" && v.startsWith("€") ? 16 : 26, fontWeight: 600, color: c }}>{v}</div>
-            {sub && <div style={{ fontSize: 11, color: "#aaa", marginTop: 4 }}>{sub}</div>}
-          </div>
-        ))}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+        {[["Clientes activos",totalC,"#1d9e75",pct+"% del total"],["Potenciales",totalP,"#ba7517",(100-pct)+"% del total"],["Actividades pend.",actsPend.length,"#378add",""],["Venta "+MESES[CM-1],"€"+vtaMes.toLocaleString("es-ES",{minimumFractionDigits:2}),"#7f77dd",""]].map(function(item){
+          var l=item[0],v=item[1],c=item[2],sub=item[3];
+          return <div key={l} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:10,padding:"1rem",textAlign:"center"}}>
+            <div style={{fontSize:12,color:"#888",marginBottom:4}}>{l}</div>
+            <div style={{fontSize:typeof v==="string"&&v.indexOf("€")>=0?16:26,fontWeight:600,color:c}}>{v}</div>
+            {sub&&<div style={{fontSize:11,color:"#aaa",marginTop:4}}>{sub}</div>}
+          </div>;
+        })}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: "#555" }}>Actividades pendientes{dashGestor?` — ${dashGestor}`:""}</div>
-          {actsPend.slice(0, 5).map(a => (
-            <div key={a.id} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-              <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-              <div>
-                <div style={{ fontSize: 13 }}>{a.titulo || clientName(a.cliente_id)}</div>
-                <div style={{ fontSize: 11, color: "#888" }}>{a.fecha} · <strong>{a.gestor}</strong></div>
-              </div>
-            </div>
-          ))}
-          {actsPend.length === 0 && <div style={{ fontSize: 12, color: "#aaa" }}>Sin pendientes.</div>}
+          <div style={{fontSize:13,fontWeight:600,marginBottom:12,color:"#555"}}>Actividades pendientes{dashGestor?" — "+dashGestor:""}</div>
+          {actsPend.slice(0,5).map(function(a){return <div key={a.id} style={{display:"flex",gap:10,marginBottom:10}}><Badge color={TIPO_C[a.tipo]} label={a.tipo} /><div><div style={{fontSize:13}}>{a.titulo||clientName(a.cliente_id)}</div><div style={{fontSize:11,color:"#888"}}>{a.fecha} · <strong>{a.gestor}</strong></div></div></div>;})}
+          {actsPend.length===0&&<div style={{fontSize:12,color:"#aaa"}}>Sin pendientes.</div>}
         </Card>
         <Card>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#555" }}>Venta mensual {currYear}</div>
-          <VentasChart data={ventasFiltLinea.filter(v => v.anio === currYear && (!dashGestor || v.gestor === dashGestor)).map(v => ({ ...v, label: MESES[(v.mes||1)-1].slice(0,3) }))} />
+          <div style={{fontSize:13,fontWeight:600,marginBottom:8,color:"#555"}}>Venta mensual {CY}</div>
+          <VentasChart data={ventasFiltLinea.filter(function(v){return v.anio===CY&&(!dashGestor||v.gestor===dashGestor);}).map(function(v){return Object.assign({},v,{label:(MESES[(v.mes||1)-1]||"").slice(0,3)});})} />
         </Card>
       </div>
     </div>;
   }
 
-  function TabClientes() {
+  function TabClientes(){
     return <div>
-      {showImportCli && <ImportExcel config={config} clients={clients} onImport={async()=>{await loadAll();setShowImportCli(false);}} onClose={()=>setShowImportCli(false)} lineaActiva={lineaActiva} />}
-      {clientPanel==="new" && <ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={()=>setClientPanel(null)} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
-      {clientPanel && clientPanel!=="new" && <ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={()=>setClientPanel(null)} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
-      {detalleId && !clientPanel && <DetalleCliente cliente={clients.find(c=>c.id===detalleId)} activities={activitiesFiltLinea} onClose={()=>setDetalleId(null)} />}
-      {!clientPanel && !showImportCli && <>
+      {showImportCli&&<ImportExcel config={config} clients={clients} onImport={function(){loadAll().then(function(){setShowImportCli(false);});}} onClose={function(){setShowImportCli(false);}} lineaActiva={lineaActiva} />}
+      {clientPanel==="new"&&<ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={function(){setClientPanel(null);}} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
+      {clientPanel&&clientPanel!=="new"&&<ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={function(){setClientPanel(null);}} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
+      {detalleId&&!clientPanel&&<DetalleCliente cliente={clients.find(function(c){return c.id===detalleId;})} activities={activitiesFiltLinea} onClose={function(){setDetalleId(null);}} />}
+      {!clientPanel&&!showImportCli&&<div>
+        {/* BUSCADOR */}
+        <div style={{marginBottom:12}}>
+          <div style={{position:"relative"}}>
+            <input value={busqueda} onChange={function(e){setBusqueda(e.target.value);}} placeholder="🔍 Buscar por nombre, NIF, ciudad, gestor o código…"
+              style={{padding:"9px 14px 9px 40px",border:"1px solid #ddd",borderRadius:10,fontSize:13,width:"100%",background:"#fff"}} />
+            <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16,color:"#aaa"}}>🔍</span>
+            {busqueda&&<button onClick={function(){setBusqueda("");}} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:16,color:"#aaa"}}>×</button>}
+          </div>
+          {busqueda&&<div style={{fontSize:12,color:"#888",marginTop:4}}>{totalFiltrados} resultado{totalFiltrados!==1?"s":""} encontrado{totalFiltrados!==1?"s":""}</div>}
+        </div>
+        {/* FILTROS */}
         <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-          <Sel value={filter.tipo_cliente} onChange={v=>setFilter(f=>({...f,tipo_cliente:v}))} options={TIPOS_CLIENTE} placeholder="Tipo" />
-          <Sel value={filter.canal}        onChange={v=>setFilter(f=>({...f,canal:v}))}        options={config.canales}  placeholder="Canal" />
-          <Sel value={filter.grupo}        onChange={v=>setFilter(f=>({...f,grupo:v}))}        options={config.grupos}   placeholder="Grupo" />
-          <Sel value={filter.gestor}       onChange={v=>setFilter(f=>({...f,gestor:v}))}       options={config.gestores} placeholder="Gestor" />
-          <Btn onClick={()=>setFilter({canal:"",grupo:"",gestor:"",tipo_cliente:""})}>Limpiar</Btn>
+          <Sel value={filter.tipo_cliente} onChange={function(v){setFilter(function(f){return Object.assign({},f,{tipo_cliente:v});});}} options={TIPOS_CLI} placeholder="Tipo" />
+          <Sel value={filter.canal}        onChange={function(v){setFilter(function(f){return Object.assign({},f,{canal:v});});}}        options={config.canales}  placeholder="Canal" />
+          <Sel value={filter.grupo}        onChange={function(v){setFilter(function(f){return Object.assign({},f,{grupo:v});});}}        options={config.grupos}   placeholder="Grupo" />
+          <Sel value={filter.gestor}       onChange={function(v){setFilter(function(f){return Object.assign({},f,{gestor:v});});}}       options={config.gestores} placeholder="Gestor" />
+          <Btn onClick={function(){setFilter({canal:"",grupo:"",gestor:"",tipo_cliente:""});setBusqueda("");}}>Limpiar</Btn>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-            <Btn variant="success" onClick={()=>{
-              const ws = XLSX.utils.json_to_sheet(filteredClients.map(c=>({ "Código":c.codigo||"","Nombre empresa":c.nombre||"","NIF":c.nif||"","Tipo":c.tipo_cliente||"","Calle":c.calle||"","Número":c.numero||"","CP":c.cp||"","Ciudad":c.ciudad||"","País":c.pais||"","Teléfono":c.telefono||"","Email":c.email||"","Contacto":c.contacto||"","Canal":c.canal||"","Grupo":c.grupo||"","Gestor":c.gestor||"","Comentarios":c.comentarios||"","Línea de negocio":c.linea_negocio||"" })));
-              const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Clientes"); XLSX.writeFile(wb,`clientes_${lineaActiva.replace(/ /g,"_")}_${new Date().toISOString().slice(0,10)}.xlsx`);
-            }}>⬇ Excel</Btn>
-            <Btn variant="warning" onClick={()=>{setDetalleId(null);setClientPanel(null);setShowImportCli(true);}}>📥 Importar</Btn>
-            <Btn variant="primary" onClick={()=>{setDetalleId(null);setShowImportCli(false);setClientPanel("new");}}>+ Nuevo</Btn>
+            <Btn variant="success" onClick={function(){
+              // Exportar TODOS los filtrados (sin paginación)
+              dlXLSX(filteredClients.map(function(c){return {"Código":c.codigo||"","Nombre empresa":c.nombre||"","NIF":c.nif||"","Tipo":c.tipo_cliente||"","Calle":c.calle||"","Número":c.numero||"","CP":c.cp||"","Ciudad":c.ciudad||"","País":c.pais||"","Teléfono":c.telefono||"","Email":c.email||"","Contacto":c.contacto||"","Canal":c.canal||"","Grupo":c.grupo||"","Gestor":c.gestor||"","Comentarios":c.comentarios||"","Línea":c.linea_negocio||""};}),
+              "Clientes","clientes_"+lineaActiva.replace(/ /g,"_")+"_"+new Date().toISOString().slice(0,10)+".xlsx");
+            }}>⬇ Excel ({filteredClients.length})</Btn>
+            <Btn variant="warning" onClick={function(){setDetalleId(null);setClientPanel(null);setShowImportCli(true);}}>📥 Importar</Btn>
+            <Btn variant="primary" onClick={function(){setDetalleId(null);setShowImportCli(false);setClientPanel("new");}}>+ Nuevo</Btn>
           </div>
         </div>
+        {/* TABLA */}
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:"#fff",borderRadius:10}}>
             <thead style={{background:"#f9f9f9"}}>
-              <tr>{["Código","Empresa","NIF","Ciudad","Teléfono","Email","Tipo","Gestor",""].map(h=><th key={h} style={{textAlign:"left",padding:"8px 10px",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>)}</tr>
+              <tr>{["Código","Empresa","NIF","Ciudad","Teléfono","Email","Tipo","Gestor",""].map(function(h){return <th key={h} style={{textAlign:"left",padding:"8px 10px",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>;})}</tr>
             </thead>
-            <tbody>{filteredClients.map(c=>(
-              <tr key={c.id} style={{borderBottom:"1px solid #f0f0f0",opacity:c.tipo_cliente==="Inactivo"?0.5:1}}>
+            <tbody>{clientesPagina.map(function(c){
+              return <tr key={c.id} style={{borderBottom:"1px solid #f0f0f0",opacity:c.tipo_cliente==="Inactivo"?0.5:1}}>
                 <td style={{padding:"9px 10px",fontSize:11,fontFamily:"monospace",color:linColor,fontWeight:600}}>{c.codigo||"—"}</td>
-                <td style={{padding:"9px 10px",fontWeight:500,cursor:"pointer",color:linColor}} onClick={()=>{setClientPanel(null);setShowImportCli(false);setDetalleId(detalleId===c.id?null:c.id);}}>{c.nombre} <span style={{fontSize:10,color:"#aaa"}}>▶</span></td>
+                <td style={{padding:"9px 10px",fontWeight:500,cursor:"pointer",color:linColor}} onClick={function(){setClientPanel(null);setShowImportCli(false);setDetalleId(detalleId===c.id?null:c.id);}}>{c.nombre} <span style={{fontSize:10,color:"#aaa"}}>▶</span></td>
                 <td style={{padding:"9px 10px",color:"#888",fontSize:12}}>{c.nif}</td>
                 <td style={{padding:"9px 10px",fontSize:12,color:"#666"}}>{c.ciudad}</td>
-                <td style={{padding:"9px 10px",fontSize:12}}>{c.telefono?<span>{c.telefono} <a href={`tel:${c.telefono}`} style={{textDecoration:"none"}}>📞</a> <a href={`https://wa.me/${c.telefono.replace(/[\s+\-()]/g,"")}`} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>💬</a></span>:"—"}</td>
-                <td style={{padding:"9px 10px",fontSize:12}}>{c.email?<a href={`mailto:${c.email}`} style={{color:linColor,textDecoration:"none"}}>✉️ {c.email}</a>:"—"}</td>
-                <td style={{padding:"9px 10px"}}><Badge color={c.tipo_cliente==="Cliente"?"#1d9e75":c.tipo_cliente==="Inactivo"?"#888":"#ba7517"} label={c.tipo_cliente||"Potencial"} /></td>
+                <td style={{padding:"9px 10px",fontSize:12}}>{c.telefono?<span>{c.telefono} <a href={"tel:"+c.telefono} style={{textDecoration:"none"}}>📞</a> <a href={"https://wa.me/"+c.telefono.replace(/[\s+\-()]/g,"")} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none"}}>💬</a></span>:"—"}</td>
+                <td style={{padding:"9px 10px",fontSize:12}}>{c.email?<a href={"mailto:"+c.email} style={{color:linColor,textDecoration:"none"}}>✉️ {c.email}</a>:"—"}</td>
+                <td style={{padding:"9px 10px"}}><Badge color={TCLI_C[c.tipo_cliente]||"#888"} label={c.tipo_cliente||"Potencial"} /></td>
                 <td style={{padding:"9px 10px",fontSize:12}}>{c.gestor}</td>
-                <td style={{padding:"9px 10px"}}><div style={{display:"flex",gap:6}}><Btn onClick={()=>{setDetalleId(null);setClientPanel(c);}}>Editar</Btn><Btn onClick={()=>deleteClient(c.id)} style={{color:"#e24b4a",borderColor:"#fca5a5"}}>Borrar</Btn></div></td>
-              </tr>
-            ))}</tbody>
+                <td style={{padding:"9px 10px"}}><div style={{display:"flex",gap:6}}><Btn onClick={function(){setDetalleId(null);setClientPanel(c);}}>Editar</Btn><Btn onClick={function(){deleteClient(c.id);}} style={{color:"#e24b4a",borderColor:"#fca5a5"}}>Borrar</Btn></div></td>
+              </tr>;
+            })}</tbody>
           </table>
           {filteredClients.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin clientes.</div>}
         </div>
-      </>}
+        <Paginacion total={totalFiltrados} pagina={pagina} onChange={setPagina} />
+      </div>}
     </div>;
   }
 
-  function TabActividades() {
-    const actsFilt = activitiesFiltLinea.filter(a =>
-      (!actFiltro.gestor || a.gestor === actFiltro.gestor) &&
-      (!actFiltro.estado || a.estado === actFiltro.estado) &&
-      (!actFiltro.tipo   || a.tipo   === actFiltro.tipo)
-    );
+  function TabActividades(){
+    var actsFilt=activitiesFiltLinea.filter(function(a){return(!actFiltro.gestor||a.gestor===actFiltro.gestor)&&(!actFiltro.estado||a.estado===actFiltro.estado)&&(!actFiltro.tipo||a.tipo===actFiltro.tipo);});
     return <div>
-      {actPanel!==null && <ActividadForm initial={actPanel==="new"?{}:{...actPanel,clienteId:actPanel.cliente_id}} config={config} clients={clientsFiltLinea} onSave={saveActivity} onCancel={()=>setActPanel(null)} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
+      {actPanel!==null&&<ActividadForm initial={actPanel==="new"?{}:Object.assign({},actPanel,{clienteId:actPanel.cliente_id})} config={config} clients={clientsFiltLinea} onSave={saveActivity} onCancel={function(){setActPanel(null);}} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
-        <Sel value={actFiltro.gestor} onChange={v=>setActFiltro(f=>({...f,gestor:v}))} options={config.gestores} placeholder="Todos los gestores" />
-        <Sel value={actFiltro.estado} onChange={v=>setActFiltro(f=>({...f,estado:v}))} options={ESTADOS_ACT} placeholder="Todos los estados" />
-        <Sel value={actFiltro.tipo}   onChange={v=>setActFiltro(f=>({...f,tipo:v}))}   options={TIPOS}       placeholder="Todos los tipos" />
-        {(actFiltro.gestor||actFiltro.estado||actFiltro.tipo)&&<Btn onClick={()=>setActFiltro({gestor:currentUser.nombre,estado:"",tipo:""})}>Limpiar</Btn>}
-        <Btn variant="primary" onClick={()=>setActPanel("new")} style={{marginLeft:"auto"}}>+ Nueva actividad</Btn>
+        <Sel value={actFiltro.gestor} onChange={function(v){setActFiltro(function(f){return Object.assign({},f,{gestor:v});});}} options={config.gestores} placeholder="Todos los gestores" />
+        <Sel value={actFiltro.estado} onChange={function(v){setActFiltro(function(f){return Object.assign({},f,{estado:v});});}} options={ESTADOS_ACT} placeholder="Todos los estados" />
+        <Sel value={actFiltro.tipo}   onChange={function(v){setActFiltro(function(f){return Object.assign({},f,{tipo:v});});}}   options={TIPOS}       placeholder="Todos los tipos" />
+        {(actFiltro.gestor||actFiltro.estado||actFiltro.tipo)&&<Btn onClick={function(){setActFiltro({gestor:currentUser.nombre,estado:"",tipo:""});}}>Limpiar</Btn>}
+        <Btn variant="primary" onClick={function(){setActPanel("new");}} style={{marginLeft:"auto"}}>+ Nueva actividad</Btn>
       </div>
-      {actsFilt.map(a=>{
-        const d=diffDays(a.fecha);
-        const alerta=a.estado!=="Completada"&&(d<0?"#fef2f2":d===0?"#fff7ed":d<=3?"#fffbeb":null);
-        return(
-          <div key={a.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"12px 10px",marginBottom:4,borderRadius:8,background:alerta||"#fff",border:`1px solid ${alerta?(d<0?"#fca5a5":d===0?"#fed7aa":"#fde68a"):"#f0f0f0"}`}}>
-            <Badge color={tipoColor[a.tipo]} label={a.tipo} />
-            <Badge color={estadoColor[a.estado||"Pendiente"]} label={a.estado||"Pendiente"} />
-            <div style={{flex:1}}>
-              {a.titulo&&<div style={{fontSize:13,fontWeight:600}}>{a.titulo}</div>}
-              <div style={{fontSize:13,fontWeight:500}}>{clientName(a.cliente_id)}</div>
-              <div style={{fontSize:12,color:"#555",marginTop:2}}>{a.nota}</div>
-              <div style={{fontSize:11,color:"#aaa",marginTop:2}}>{a.fecha} · <strong>{a.gestor}</strong> · <Badge color={prioColor[a.prioridad||"Media"]} label={a.prioridad||"Media"} /></div>
-            </div>
-            <Btn onClick={()=>setActPanel(a)}>Editar</Btn>
-            <Btn onClick={()=>deleteActivity(a.id)} style={{color:"#e24b4a",borderColor:"#fca5a5"}}>Borrar</Btn>
+      {actsFilt.map(function(a){
+        var d=ddiff(a.fecha);
+        var alerta=a.estado!=="Completada"&&(d<0?"#fef2f2":d===0?"#fff7ed":d<=3?"#fffbeb":null);
+        var bord=alerta?(d<0?"#fca5a5":d===0?"#fed7aa":"#fde68a"):"#f0f0f0";
+        return <div key={a.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"12px 10px",marginBottom:4,borderRadius:8,background:alerta||"#fff",border:"1px solid "+bord}}>
+          <Badge color={TIPO_C[a.tipo]} label={a.tipo} />
+          <Badge color={EST_C[a.estado||"Pendiente"]} label={a.estado||"Pendiente"} />
+          <div style={{flex:1}}>
+            {a.titulo&&<div style={{fontSize:13,fontWeight:600}}>{a.titulo}</div>}
+            <div style={{fontSize:13,fontWeight:500}}>{clientName(a.cliente_id)}</div>
+            <div style={{fontSize:12,color:"#555",marginTop:2}}>{a.nota}</div>
+            <div style={{fontSize:11,color:"#aaa",marginTop:2}}>{a.fecha} · <strong>{a.gestor}</strong> · <Badge color={PRIO_C[a.prioridad||"Media"]} label={a.prioridad||"Media"} /></div>
           </div>
-        );
+          <Btn onClick={function(){setActPanel(a);}}>Editar</Btn>
+          <Btn onClick={function(){deleteActivity(a.id);}} style={{color:"#e24b4a",borderColor:"#fca5a5"}}>Borrar</Btn>
+        </div>;
       })}
       {actsFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin actividades.</div>}
     </div>;
   }
 
-  function TabVentas() {
-    const totalVenta = ventasFilt.reduce((s,v)=>s+(v.venta_neta||0),0);
-    const totalUds   = ventasFilt.reduce((s,v)=>s+(v.unidades||0),0);
+  function TabVentas(){
+    var totalVenta=ventasFilt.reduce(function(s,v){return s+(v.venta_neta||0);},0);
+    var totalUds=ventasFilt.reduce(function(s,v){return s+(v.unidades||0);},0);
     return <div>
-      {showImportVen&&<ImportVentas clients={clients} onImport={async()=>{await loadAll();setShowImportVen(false);}} onClose={()=>setShowImportVen(false)} />}
-      {!showImportVen&&<>
+      {showImportVen&&<ImportVentas clients={clients} onImport={function(){loadAll().then(function(){setShowImportVen(false);});}} onClose={function(){setShowImportVen(false);}} />}
+      {!showImportVen&&<div>
         <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"flex-end"}}>
-          {[["Canal","canal",config.canales],["Gestor","gestor",config.gestores],["Grupo","grupo",config.grupos]].map(([l,k,opts])=>(
-            <div key={k} style={{flex:"1 1 120px"}}>
-              <div style={{fontSize:11,color:"#888",marginBottom:3}}>{l}</div>
-              <Sel value={ventasFiltro[k]} onChange={v=>setVentasFiltro(f=>({...f,[k]:v}))} options={opts} placeholder="Todos" />
-            </div>
-          ))}
-          <div style={{flex:"1 1 100px"}}>
-            <div style={{fontSize:11,color:"#888",marginBottom:3}}>Mes</div>
-            <Sel value={ventasFiltro.mes} onChange={v=>setVentasFiltro(f=>({...f,mes:v}))} options={MESES.map((_,i)=>String(i+1))} placeholder="Todos" />
-          </div>
-          <div style={{flex:"1 1 100px"}}>
-            <div style={{fontSize:11,color:"#888",marginBottom:3}}>Año</div>
-            <Sel value={ventasFiltro.anio} onChange={v=>setVentasFiltro(f=>({...f,anio:v}))} options={["", ...ANIOS]} placeholder="Todos" />
-          </div>
-          <div style={{flex:"1 1 120px"}}>
-            <div style={{fontSize:11,color:"#888",marginBottom:3}}>Agrupar gráfico</div>
-            <Sel value={ventasFiltro.groupBy} onChange={v=>setVentasFiltro(f=>({...f,groupBy:v}))} options={["mes","gestor","canal","cliente"]} />
-          </div>
-          <Btn onClick={()=>setVentasFiltro({canal:"",gestor:currentUser.nombre,grupo:"",mes:"",anio:String(currYear),groupBy:"mes"})}>Limpiar</Btn>
-          <Btn variant="warning" onClick={()=>setShowImportVen(true)}>📥 Importar/Borrar</Btn>
-          <Btn variant="success" onClick={()=>downloadCSV(toCSV(ventasFilt.map(v=>({...v,cliente:clientName(v.cliente_id),mes_nombre:MESES[(v.mes||1)-1]})),[
-            {key:"cliente",label:"Cliente"},{key:"codigo_cliente",label:"Cód.Cliente"},{key:"codigo_producto",label:"Cód.Producto"},
-            {key:"denominacion",label:"Producto"},{key:"unidades",label:"Unidades"},{key:"precio_unidad",label:"Precio Unidad"},
-            {key:"venta_neta",label:"Venta Neta"},{key:"mes_nombre",label:"Mes"},{key:"anio",label:"Año"},{key:"gestor",label:"Gestor"}
-          ]),"ventas.csv")}>⬇ CSV</Btn>
+          {[["Canal","canal",config.canales],["Gestor","gestor",config.gestores],["Grupo","grupo",config.grupos]].map(function(item){
+            var l=item[0],k=item[1],opts=item[2];
+            return <div key={k} style={{flex:"1 1 120px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{l}</div><Sel value={ventasFiltro[k]} onChange={function(v){setVentasFiltro(function(f){return Object.assign({},f,{[k]:v});});}} options={opts} placeholder="Todos" /></div>;
+          })}
+          <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>Mes</div><Sel value={ventasFiltro.mes} onChange={function(v){setVentasFiltro(function(f){return Object.assign({},f,{mes:v});});}} options={MESES.map(function(_,i){return String(i+1);})} placeholder="Todos" /></div>
+          <div style={{flex:"1 1 100px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>Año</div><Sel value={ventasFiltro.anio} onChange={function(v){setVentasFiltro(function(f){return Object.assign({},f,{anio:v});});}} options={[""].concat(ANIOS)} placeholder="Todos" /></div>
+          <div style={{flex:"1 1 120px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>Agrupar gráfico</div><Sel value={ventasFiltro.groupBy} onChange={function(v){setVentasFiltro(function(f){return Object.assign({},f,{groupBy:v});});}} options={["mes","gestor","canal","cliente"]} /></div>
+          <Btn onClick={function(){setVentasFiltro({canal:"",gestor:currentUser.nombre,grupo:"",mes:"",anio:String(CY),groupBy:"mes"});}}>Limpiar</Btn>
+          <Btn variant="warning" onClick={function(){setShowImportVen(true);}}>📥 Importar/Borrar</Btn>
+          <Btn variant="success" onClick={function(){dlCSV(toCSV(ventasFilt.map(function(v){return Object.assign({},v,{cliente:clientName(v.cliente_id),mes_nombre:MESES[(v.mes||1)-1]});}),[ {key:"cliente",label:"Cliente"},{key:"codigo_cliente",label:"Cód.Cliente"},{key:"codigo_producto",label:"Cód.Producto"},{key:"denominacion",label:"Producto"},{key:"unidades",label:"Unidades"},{key:"precio_unidad",label:"Precio Unidad"},{key:"venta_neta",label:"Venta Neta"},{key:"mes_nombre",label:"Mes"},{key:"anio",label:"Año"},{key:"gestor",label:"Gestor"} ]),"ventas.csv");}}>⬇ CSV</Btn>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
-          {[["Venta neta total",`€${totalVenta.toLocaleString("es-ES",{minimumFractionDigits:2})}`,"#185fa5"],["Total unidades",totalUds.toLocaleString("es-ES"),"#1d9e75"],["Líneas",ventasFilt.length,"#7f77dd"]].map(([l,v,c])=>(
-            <div key={l} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:10,padding:"1rem",textAlign:"center"}}>
-              <div style={{fontSize:12,color:"#888",marginBottom:4}}>{l}</div>
-              <div style={{fontSize:typeof v==="string"&&v.startsWith("€")?18:22,fontWeight:600,color:c}}>{v}</div>
-            </div>
-          ))}
+          {[["Venta neta total","€"+totalVenta.toLocaleString("es-ES",{minimumFractionDigits:2}),"#185fa5"],["Total unidades",totalUds.toLocaleString("es-ES"),"#1d9e75"],["Líneas",ventasFilt.length,"#7f77dd"]].map(function(item){
+            var l=item[0],v=item[1],c=item[2];
+            return <div key={l} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:10,padding:"1rem",textAlign:"center"}}><div style={{fontSize:12,color:"#888",marginBottom:4}}>{l}</div><div style={{fontSize:typeof v==="string"&&v.indexOf("€")>=0?18:22,fontWeight:600,color:c}}>{v}</div></div>;
+          })}
         </div>
         <Card><VentasChart data={ventasChart} /></Card>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:"#fff",borderRadius:10}}>
-            <thead style={{background:"#f9f9f9"}}>
-              <tr>{["Cliente","Cód.Cliente","Producto","Uds","P.Unit","Venta Neta","Mes","Año","Gestor"].map(h=><th key={h} style={{textAlign:"left",padding:"8px 10px",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>)}</tr>
-            </thead>
-            <tbody>{ventasFilt.map(v=>(
-              <tr key={v.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+            <thead style={{background:"#f9f9f9"}}><tr>{["Cliente","Cód.Cliente","Producto","Uds","P.Unit","Venta Neta","Mes","Año","Gestor"].map(function(h){return <th key={h} style={{textAlign:"left",padding:"8px 10px",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>;})}</tr></thead>
+            <tbody>{ventasFilt.map(function(v){
+              return <tr key={v.id} style={{borderBottom:"1px solid #f0f0f0"}}>
                 <td style={{padding:"8px 10px",fontWeight:500}}>{clientName(v.cliente_id)}</td>
                 <td style={{padding:"8px 10px",fontSize:11,fontFamily:"monospace",color:linColor}}>{v.codigo_cliente}</td>
                 <td style={{padding:"8px 10px",fontSize:12}}>{v.denominacion}</td>
@@ -1095,109 +1204,96 @@ function CRM() {
                 <td style={{padding:"8px 10px",fontSize:12}}>{MESES[(v.mes||1)-1]}</td>
                 <td style={{padding:"8px 10px",fontSize:12}}>{v.anio}</td>
                 <td style={{padding:"8px 10px",fontSize:12}}>{v.gestor}</td>
-              </tr>
-            ))}</tbody>
+              </tr>;
+            })}</tbody>
           </table>
-          {ventasFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin datos de ventas.</div>}
+          {ventasFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin datos.</div>}
         </div>
-      </>}
+      </div>}
     </div>;
   }
 
-  function TabInformes() {
-    const [rptFilter, setRptFilter] = useState({ canal:"", grupo:"", gestor:"", fechaDesde:"", fechaHasta:"", estado:"" });
-    const fc = clientsFiltLinea.filter(c=>(!rptFilter.canal||c.canal===rptFilter.canal)&&(!rptFilter.grupo||c.grupo===rptFilter.grupo)&&(!rptFilter.gestor||c.gestor===rptFilter.gestor));
-    const rows = fc.map(c=>{
-      const cActs=activitiesFiltLinea.filter(a=>a.cliente_id===c.id&&(!rptFilter.fechaDesde||a.fecha>=rptFilter.fechaDesde)&&(!rptFilter.fechaHasta||a.fecha<=rptFilter.fechaHasta)&&(!rptFilter.estado||a.estado===rptFilter.estado));
-      const ultima=cActs.length?cActs[0].fecha:"—";
-      const ventaCliente=ventasFiltLinea.filter(v=>v.cliente_id===c.id).reduce((s,v)=>s+(v.venta_neta||0),0);
-      return {...c,numActs:cActs.length,ultima,actsPend:activitiesFiltLinea.filter(a=>a.cliente_id===c.id&&a.estado!=="Completada").length,ventaTotal:ventaCliente};
+  function TabInformes(){
+    var [rptFilter,setRptFilter]=useState({canal:"",grupo:"",gestor:"",fechaDesde:"",fechaHasta:"",estado:""});
+    var fc=clientsFiltLinea.filter(function(c){return(!rptFilter.canal||c.canal===rptFilter.canal)&&(!rptFilter.grupo||c.grupo===rptFilter.grupo)&&(!rptFilter.gestor||c.gestor===rptFilter.gestor);});
+    var rows=fc.map(function(c){
+      var cActs=activitiesFiltLinea.filter(function(a){return a.cliente_id===c.id&&(!rptFilter.fechaDesde||a.fecha>=rptFilter.fechaDesde)&&(!rptFilter.fechaHasta||a.fecha<=rptFilter.fechaHasta)&&(!rptFilter.estado||a.estado===rptFilter.estado);});
+      var ultima=cActs.length?cActs[0].fecha:"—";
+      var vta=ventasFiltLinea.filter(function(v){return v.cliente_id===c.id;}).reduce(function(s,v){return s+(v.venta_neta||0);},0);
+      return Object.assign({},c,{numActs:cActs.length,ultima:ultima,actsPend:activitiesFiltLinea.filter(function(a){return a.cliente_id===c.id&&a.estado!=="Completada";}).length,ventaTotal:vta});
     });
     return <div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16,alignItems:"flex-end"}}>
-        {[["Canal","canal",config.canales],["Grupo","grupo",config.grupos],["Gestor","gestor",config.gestores],["Estado activ.","estado",ESTADOS_ACT]].map(([l,k,opts])=>(
-          <div key={k} style={{flex:"1 1 120px"}}>
-            <div style={{fontSize:11,color:"#888",marginBottom:3}}>{l}</div>
-            <Sel value={rptFilter[k]} onChange={v=>setRptFilter(f=>({...f,[k]:v}))} options={opts} placeholder="Todos" />
-          </div>
-        ))}
-        {[["fechaDesde","Activ. desde"],["fechaHasta","Activ. hasta"]].map(([k,l])=>(
-          <div key={k} style={{flex:"1 1 120px"}}>
-            <div style={{fontSize:11,color:"#888",marginBottom:3}}>{l}</div>
-            <Inp type="date" value={rptFilter[k]} onChange={v=>setRptFilter(f=>({...f,[k]:v}))} />
-          </div>
-        ))}
-        <Btn onClick={()=>setRptFilter({canal:"",grupo:"",gestor:"",fechaDesde:"",fechaHasta:"",estado:""})}>Limpiar</Btn>
-        <Btn variant="success" onClick={()=>downloadCSV(toCSV(rows,[
-          {key:"codigo",label:"Código"},{key:"nombre",label:"Empresa"},{key:"tipo_cliente",label:"Tipo"},
-          {key:"canal",label:"Canal"},{key:"grupo",label:"Grupo"},{key:"gestor",label:"Gestor"},
-          {key:"numActs",label:"Actividades"},{key:"actsPend",label:"Pendientes"},{key:"ultima",label:"Última activ."},
-          {key:"ventaTotal",label:"Venta Total €"}
-        ]),"informe.csv")}>⬇ CSV</Btn>
+        {[["Canal","canal",config.canales],["Grupo","grupo",config.grupos],["Gestor","gestor",config.gestores],["Estado activ.","estado",ESTADOS_ACT]].map(function(item){
+          var l=item[0],k=item[1],opts=item[2];
+          return <div key={k} style={{flex:"1 1 120px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{l}</div><Sel value={rptFilter[k]} onChange={function(v){setRptFilter(function(f){return Object.assign({},f,{[k]:v});});}} options={opts} placeholder="Todos" /></div>;
+        })}
+        {[["fechaDesde","Activ. desde"],["fechaHasta","Activ. hasta"]].map(function(item){
+          var k=item[0],l=item[1];
+          return <div key={k} style={{flex:"1 1 120px"}}><div style={{fontSize:11,color:"#888",marginBottom:3}}>{l}</div><Inp type="date" value={rptFilter[k]} onChange={function(v){setRptFilter(function(f){return Object.assign({},f,{[k]:v});});}} /></div>;
+        })}
+        <Btn onClick={function(){setRptFilter({canal:"",grupo:"",gestor:"",fechaDesde:"",fechaHasta:"",estado:""});}}>Limpiar</Btn>
+        <Btn variant="success" onClick={function(){dlCSV(toCSV(rows,[{key:"codigo",label:"Código"},{key:"nombre",label:"Empresa"},{key:"tipo_cliente",label:"Tipo"},{key:"canal",label:"Canal"},{key:"grupo",label:"Grupo"},{key:"gestor",label:"Gestor"},{key:"numActs",label:"Actividades"},{key:"actsPend",label:"Pendientes"},{key:"ultima",label:"Última activ."},{key:"ventaTotal",label:"Venta Total €"}]),"informe.csv");}}>⬇ CSV</Btn>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
-        {[["Clientes",rows.length,"#185fa5"],["Actividades",rows.reduce((s,r)=>s+r.numActs,0),"#1d9e75"],["Pendientes",rows.reduce((s,r)=>s+r.actsPend,0),"#ba7517"],[`Venta Total`,`€${rows.reduce((s,r)=>s+r.ventaTotal,0).toLocaleString("es-ES",{minimumFractionDigits:2})}`,"#7f77dd"]].map(([l,v,c])=>(
-          <div key={l} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:8,padding:"0.75rem 1rem"}}>
-            <div style={{fontSize:11,color:"#888",marginBottom:2}}>{l}</div>
-            <div style={{fontSize:typeof v==="string"&&v.startsWith("€")?15:22,fontWeight:600,color:c}}>{v}</div>
-          </div>
-        ))}
+        {[["Clientes",rows.length,"#185fa5"],["Actividades",rows.reduce(function(s,r){return s+r.numActs;},0),"#1d9e75"],["Pendientes",rows.reduce(function(s,r){return s+r.actsPend;},0),"#ba7517"],["Venta Total","€"+rows.reduce(function(s,r){return s+r.ventaTotal;},0).toLocaleString("es-ES",{minimumFractionDigits:2}),"#7f77dd"]].map(function(item){
+          var l=item[0],v=item[1],c=item[2];
+          return <div key={l} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:8,padding:"0.75rem 1rem"}}><div style={{fontSize:11,color:"#888",marginBottom:2}}>{l}</div><div style={{fontSize:typeof v==="string"&&v.indexOf("€")>=0?15:22,fontWeight:600,color:c}}>{v}</div></div>;
+        })}
       </div>
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:"#fff",borderRadius:10}}>
-          <thead style={{background:"#f9f9f9"}}>
-            <tr>{["Código","Empresa","Tipo","Canal","Gestor","Actividades","Pendientes","Última activ.","Venta Total"].map(h=><th key={h} style={{textAlign:"left",padding:"8px 10px",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>)}</tr>
-          </thead>
-          <tbody>{rows.map(r=>(
-            <tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}}>
+          <thead style={{background:"#f9f9f9"}}><tr>{["Código","Empresa","Tipo","Canal","Gestor","Actividades","Pendientes","Última activ.","Venta Total"].map(function(h){return <th key={h} style={{textAlign:"left",padding:"8px 10px",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>;})}</tr></thead>
+          <tbody>{rows.map(function(r){
+            return <tr key={r.id} style={{borderBottom:"1px solid #f0f0f0"}}>
               <td style={{padding:"9px 10px",fontSize:11,fontFamily:"monospace",color:linColor,fontWeight:600}}>{r.codigo||"—"}</td>
               <td style={{padding:"9px 10px",fontWeight:500}}>{r.nombre}</td>
-              <td style={{padding:"9px 10px"}}><Badge color={r.tipo_cliente==="Cliente"?"#1d9e75":r.tipo_cliente==="Inactivo"?"#888":"#ba7517"} label={r.tipo_cliente||"Potencial"} /></td>
+              <td style={{padding:"9px 10px"}}><Badge color={TCLI_C[r.tipo_cliente]||"#888"} label={r.tipo_cliente||"Potencial"} /></td>
               <td style={{padding:"9px 10px"}}><Badge color="#7f77dd" label={r.canal||"—"} /></td>
               <td style={{padding:"9px 10px",fontSize:12}}>{r.gestor}</td>
               <td style={{padding:"9px 10px",textAlign:"center",color:r.numActs>0?"#1d9e75":"#aaa",fontWeight:600}}>{r.numActs}</td>
               <td style={{padding:"9px 10px",textAlign:"center",color:r.actsPend>0?"#ba7517":"#aaa",fontWeight:600}}>{r.actsPend}</td>
               <td style={{padding:"9px 10px",fontSize:12}}>{r.ultima}</td>
               <td style={{padding:"9px 10px",textAlign:"right",fontWeight:600,color:"#1d9e75"}}>€{r.ventaTotal.toLocaleString("es-ES",{minimumFractionDigits:2})}</td>
-            </tr>
-          ))}</tbody>
+            </tr>;
+          })}</tbody>
         </table>
         {rows.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin resultados.</div>}
       </div>
     </div>;
   }
 
-  function TabConfiguracion() {
-    const sections=[["Canales","canal","canales","#7f77dd"],["Grupos gestores","grupo","grupos","#1d9e75"],["Gestores","gestor","gestores","#378add"]];
+  function TabConfiguracion(){
+    var sections=[["Canales","canal","canales","#7f77dd"],["Grupos gestores","grupo","grupos","#1d9e75"],["Gestores","gestor","gestores","#378add"]];
     return <div>
-      {currentUser.admin&&<><AdminPanel /><NotifConfig activities={activities} clients={clients} currentUser={currentUser} /><Sep label="Listas de configuración" /></>}
-      {sections.map(([label,ckey,k,color])=>(
-        <div key={ckey} style={{marginBottom:24}}>
+      {currentUser.admin&&<div><AdminPanel /><NotifConfig activities={activities} clients={clients} currentUser={currentUser} /><Sep label="Listas de configuración" /></div>}
+      {sections.map(function(item){
+        var label=item[0],ckey=item[1],k=item[2],color=item[3];
+        return <div key={ckey} style={{marginBottom:24}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>{label}</div>
           <div style={{display:"flex",gap:8,marginBottom:10}}>
-            <Inp value={newVal[ckey]} onChange={v=>setNewVal(n=>({...n,[ckey]:v}))} placeholder="Nuevo..." />
-            <Btn variant="primary" onClick={async()=>{const v=newVal[ckey].trim();if(!v||config[k].includes(v))return;await saveConfig(k,[...config[k],v]);setNewVal(n=>({...n,[ckey]:""}));}}>Añadir</Btn>
+            <Inp value={newVal[ckey]} onChange={function(v){setNewVal(function(n){return Object.assign({},n,{[ckey]:v});});}} placeholder="Nuevo..." />
+            <Btn variant="primary" onClick={function(){var v=(newVal[ckey]||"").trim();if(!v||config[k].indexOf(v)>=0)return;saveConfig(k,config[k].concat([v])).then(function(){setNewVal(function(n){return Object.assign({},n,{[ckey]:""});});});}}>Añadir</Btn>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-            {config[k].map(v=>(
-              <span key={v} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:16,background:color+"18",border:`1px solid ${color}44`,fontSize:13}}>
-                <span style={{color}}>{v}</span>
-                <button onClick={async()=>await saveConfig(k,config[k].filter(x=>x!==v))} style={{background:"none",border:"none",cursor:"pointer",color,fontSize:16,lineHeight:1,padding:0}}>×</button>
-              </span>
-            ))}
+            {config[k].map(function(v){
+              return <span key={v} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 12px",borderRadius:16,background:color+"18",border:"1px solid "+color+"44",fontSize:13}}>
+                <span style={{color:color}}>{v}</span>
+                <button onClick={function(){saveConfig(k,config[k].filter(function(x){return x!==v;}));}} style={{background:"none",border:"none",cursor:"pointer",color:color,fontSize:16,lineHeight:1,padding:0}}>×</button>
+              </span>;
+            })}
           </div>
-        </div>
-      ))}
+        </div>;
+      })}
     </div>;
   }
 
   return (
     <div>
-      {/* HEADER */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",padding:"1rem 1.25rem",borderRadius:12,background:linGrad}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:64,height:64,borderRadius:"50%",overflow:"hidden",border:"2px solid rgba(255,255,255,0.6)",flexShrink:0}}>
-            <img src={LINEA_LOGOS[lineaActiva]} alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}} />
+            <img src={linLogo} alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}} />
           </div>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>CRM — {lineaActiva}</div>
@@ -1205,15 +1301,14 @@ function CRM() {
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",justifyContent:"flex-end"}}>
-          {/* Selector línea de negocio — solo si tiene más de una */}
-          {currentUser.lineas && currentUser.lineas.length > 1 && (
+          {currentUser.lineas&&currentUser.lineas.length>1&&(
             <div style={{display:"flex",gap:4,background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"3px"}}>
-              {currentUser.lineas.map(l => (
-                <button key={l} onClick={() => cambiarLinea(l)}
+              {currentUser.lineas.map(function(l){
+                return <button key={l} onClick={function(){cambiarLinea(l);}}
                   style={{padding:"4px 12px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:lineaActiva===l?"#fff":"transparent",color:lineaActiva===l?linColor:"rgba(255,255,255,0.8)",transition:"all 0.2s"}}>
                   {l}
-                </button>
-              ))}
+                </button>;
+              })}
             </div>
           )}
           <div style={{fontSize:12,color:"rgba(255,255,255,0.9)",background:"rgba(255,255,255,0.15)",padding:"4px 12px",borderRadius:20}}>👤 {currentUser.nombre}{currentUser.admin?" ⭐":""}</div>
@@ -1225,16 +1320,16 @@ function CRM() {
         </div>
       </div>
       <div style={{display:"flex",gap:2,marginBottom:24,borderBottom:"1px solid #e8e8e8",overflowX:"auto"}}>
-        {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"8px 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t?600:400,color:tab===t?linColor:"#666",borderBottom:tab===t?`2px solid ${linColor}`:"2px solid transparent",marginBottom:-1,whiteSpace:"nowrap"}}>{t}</button>)}
+        {TABS.map(function(t){return <button key={t} onClick={function(){setTab(t);}} style={{padding:"8px 16px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===t?600:400,color:tab===t?linColor:"#666",borderBottom:tab===t?"2px solid "+linColor:"2px solid transparent",marginBottom:-1,whiteSpace:"nowrap"}}>{t}</button>;})}
       </div>
-      {loading?<Spinner/>:error?<ErrMsg msg={error} onRetry={loadAll}/>:<>
-        {tab==="Dashboard"     && <Dashboard />}
-        {tab==="Clientes"      && <TabClientes />}
-        {tab==="Actividades"   && <TabActividades />}
-        {tab==="Ventas"        && <TabVentas />}
-        {tab==="Informes"      && <TabInformes />}
-        {tab==="Configuración" && <TabConfiguracion />}
-      </>}
+      {loading?<Spinner/>:error?<ErrMsg msg={error} onRetry={loadAll}/>:<div>
+        {tab==="Dashboard"     &&<Dashboard />}
+        {tab==="Clientes"      &&<TabClientes />}
+        {tab==="Actividades"   &&<TabActividades />}
+        {tab==="Ventas"        &&<TabVentas />}
+        {tab==="Informes"      &&<TabInformes />}
+        {tab==="Configuración" &&<TabConfiguracion />}
+      </div>}
     </div>
   );
 }
