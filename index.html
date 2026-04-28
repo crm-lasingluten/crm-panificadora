@@ -891,7 +891,6 @@ function CRM() {
   var [showImportCli,setShowImportCli]=useState(false);
   var [showImportVen,setShowImportVen]=useState(false);
   var [busqueda,setBusqueda]=useState("");
-  var [busquedaInput,setBusquedaInput]=useState("");
   var [pagina,setPagina]=useState(1);
   var [filter,setFilter]=useState({canal:"",grupo:"",gestor:"",tipo_cliente:""});
   var [actFiltro,setActFiltro]=useState({gestor:"",estado:"",tipo:""});
@@ -1006,16 +1005,10 @@ function CRM() {
     });
   },[clientsFiltLinea,filter,busqueda]);
 
-  // Debounce buscador — espera 300ms antes de filtrar
-  useEffect(function(){
-    var t=setTimeout(function(){ setBusqueda(busquedaInput); },300);
-    return function(){ clearTimeout(t); };
-  },[busquedaInput]);
-
-
   // Reset página al cambiar filtros/búsqueda
   useEffect(function(){setPagina(1);},[busqueda,filter,lineaActiva]);
 
+  var totalFiltrados=filteredClients.length;
   var clientesPagina=filteredClients.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
 
   var ventasFilt=useMemo(function(){return ventasFiltLinea.filter(function(v){
