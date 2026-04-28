@@ -581,9 +581,7 @@ function DetalleCliente(props) {
     }
   },[cliente&&cliente.id]);
   var cActs=activities.filter(function(a){return a.cliente_id===cliente.id;}).sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
-  var dir=[cliente.calle,cliente.numero].filter(Boolean).join(" ");
-  if([cliente.cp,cliente.ciudad].filter(Boolean).length) dir+=", "+[cliente.cp,cliente.ciudad].filter(Boolean).join(" ");
-  if(cliente.pais) dir+=", "+cliente.pais;
+  var dir=[cliente.calle,cliente.numero].filter(Boolean).join(" ")+([cliente.cp,cliente.ciudad].filter(Boolean).length?", "+[cliente.cp,cliente.ciudad].filter(Boolean).join(" "):""+(cliente.pais?", "+cliente.pais:""));
   return (
     <Card>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -699,16 +697,11 @@ function ImportExcel(props) {
     if(!preview||!preview.length)return;
     setImporting(true);
     var ok=0,skip=0,err=0,errores=[],idx=0;
-    // Calcular el máximo código existente
-    var allCodes=clients.map(function(c){return c.codigo;}).filter(Boolean);
-    var maxNum=allCodes.length?Math.max.apply(null,allCodes.map(function(c){return parseInt((c||"").replace("CL",""))||0;})):0;
     function next(){
       if(idx>=preview.length){setImporting(false);setResult({ok:ok,skip:skip,err:err,errores:errores});if(ok>0)onImport();return;}
       var row=preview[idx++];
       var existe=clients.some(function(c){return norm(c.nombre)===norm(row.nombre);});
       if(existe){skip++;next();return;}
-      maxNum++;
-      row.codigo="CL"+String(maxNum).padStart(6,"0");
       sbPost("clientes",row).then(function(){ok++;next();}).catch(function(e){err++;errores.push(row.nombre+": "+e.message);next();});
     }
     next();
@@ -898,7 +891,6 @@ function CRM() {
   var [showImportCli,setShowImportCli]=useState(false);
   var [showImportVen,setShowImportVen]=useState(false);
   var [busqueda,setBusqueda]=useState("");
-  var [busquedaInput,setBusquedaInput]=useState("");
   var [pagina,setPagina]=useState(1);
   var [filter,setFilter]=useState({canal:"",grupo:"",gestor:"",tipo_cliente:""});
   var [actFiltro,setActFiltro]=useState({gestor:"",estado:"",tipo:""});
@@ -1013,16 +1005,10 @@ function CRM() {
     });
   },[clientsFiltLinea,filter,busqueda]);
 
-  // Debounce buscador — espera 300ms antes de filtrar
-  useEffect(function(){
-    var t=setTimeout(function(){ setBusqueda(busquedaInput); },300);
-    return function(){ clearTimeout(t); };
-  },[busquedaInput]);
-
-
   // Reset página al cambiar filtros/búsqueda
   useEffect(function(){setPagina(1);},[busqueda,filter,lineaActiva]);
 
+  var totalFiltrados=filteredClients.length;
   var clientesPagina=filteredClients.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
 
   var ventasFilt=useMemo(function(){return ventasFiltLinea.filter(function(v){
