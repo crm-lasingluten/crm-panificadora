@@ -581,7 +581,9 @@ function DetalleCliente(props) {
     }
   },[cliente&&cliente.id]);
   var cActs=activities.filter(function(a){return a.cliente_id===cliente.id;}).sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
-  var dir=[cliente.calle,cliente.numero].filter(Boolean).join(" ")+([cliente.cp,cliente.ciudad].filter(Boolean).length?", "+[cliente.cp,cliente.ciudad].filter(Boolean).join(" "):""+(cliente.pais?", "+cliente.pais:""));
+  var dir=[cliente.calle,cliente.numero].filter(Boolean).join(" ");
+  if([cliente.cp,cliente.ciudad].filter(Boolean).length) dir+=", "+[cliente.cp,cliente.ciudad].filter(Boolean).join(" ");
+  if(cliente.pais) dir+=", "+cliente.pais;
   return (
     <Card>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
