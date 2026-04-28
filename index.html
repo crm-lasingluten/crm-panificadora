@@ -393,13 +393,13 @@ function NotifBanner(props) {
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div style={{flex:1}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>{isV?"🔴":isH?"🟠":"🟡"} {alertas.length} actividad{alertas.length!==1?"es":""} requieren atención</div>
-          {alertas.slice(0,5).map(function(a){
-            return <div key={a.id} style={{fontSize:12,color:"#555",marginBottom:3,display:"flex",gap:8,alignItems:"flex-start"}}>
+          {alertas.slice(0,3).map(function(a){
+            return <div key={a.id} style={{fontSize:12,color:"#555",marginBottom:3,display:"flex",gap:8}}>
               <Badge color={isV?"#e24b4a":isH?"#ba7517":"#d97706"} label={a.label} />
-              <span><strong>{a.titulo||(a.nota||"").slice(0,30)}</strong> — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
+              <span>{a.titulo||(a.nota||"").slice(0,40)} — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
             </div>;
           })}
-          {alertas.length>5&&<div style={{fontSize:12,color:"#888",marginTop:4}}>…y {alertas.length-5} más</div>}
+          {alertas.length>3&&<div style={{fontSize:12,color:"#888",marginTop:4}}>…y {alertas.length-3} más</div>}
         </div>
         <button onClick={function(){setVisible(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#888",fontSize:18,marginLeft:12}}>×</button>
       </div>
@@ -897,8 +897,8 @@ function CRM() {
   var [actPanel,setActPanel]=useState(null);
   var [showImportCli,setShowImportCli]=useState(false);
   var [showImportVen,setShowImportVen]=useState(false);
-  // Buscador sin debounce — directo y fluido
-  var [busqueda,setBusquedaInput]=useState("");
+  var [busqueda,setBusqueda]=useState("");
+  var [busquedaInput,setBusquedaInput]=useState("");
   var [pagina,setPagina]=useState(1);
   var [filter,setFilter]=useState({canal:"",grupo:"",gestor:"",tipo_cliente:""});
   var [actFiltro,setActFiltro]=useState({gestor:"",estado:"",tipo:""});
@@ -1075,16 +1075,7 @@ function CRM() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         <Card>
           <div style={{fontSize:13,fontWeight:600,marginBottom:12,color:"#555"}}>Actividades pendientes{dashGestor?" — "+dashGestor:""}</div>
-          <div style={{maxHeight:320,overflowY:"auto"}}>
-            {actsPend.map(function(a){return <div key={a.id} style={{display:"flex",gap:10,marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f5f5f5"}}>
-              <Badge color={TIPO_C[a.tipo]||"#888"} label={a.tipo} />
-              <div>
-                <div style={{fontSize:13,fontWeight:500}}>{a.titulo||"(sin título)"}</div>
-                <div style={{fontSize:12,color:"#555"}}>{clientName(a.cliente_id)}</div>
-                <div style={{fontSize:11,color:"#888"}}>{a.fecha} · <strong>{a.gestor}</strong></div>
-              </div>
-            </div>;})}
-          </div>
+          {actsPend.slice(0,5).map(function(a){return <div key={a.id} style={{display:"flex",gap:10,marginBottom:10}}><Badge color={TIPO_C[a.tipo]} label={a.tipo} /><div><div style={{fontSize:13}}>{a.titulo||clientName(a.cliente_id)}</div><div style={{fontSize:11,color:"#888"}}>{a.fecha} · <strong>{a.gestor}</strong></div></div></div>;})}
           {actsPend.length===0&&<div style={{fontSize:12,color:"#aaa"}}>Sin pendientes.</div>}
         </Card>
         <Card>
