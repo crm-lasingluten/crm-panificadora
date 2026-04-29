@@ -371,7 +371,7 @@ function NotifConfig(props) {
   );
 }
 
-// ── NOTIF BANNER ──────────────────────────────────────────────────────────────
+// ── NOTIF BANNER — FIX: muestra nombre cliente + hasta 5 items ────────────────
 function NotifBanner(props) {
   var activities=props.activities,clients=props.clients,filterGestor=props.filterGestor;
   function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
@@ -393,13 +393,13 @@ function NotifBanner(props) {
       <div style={{display:"flex",justifyContent:"space-between"}}>
         <div style={{flex:1}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>{isV?"🔴":isH?"🟠":"🟡"} {alertas.length} actividad{alertas.length!==1?"es":""} requieren atención</div>
-          {alertas.slice(0,3).map(function(a){
-            return <div key={a.id} style={{fontSize:12,color:"#555",marginBottom:3,display:"flex",gap:8}}>
+          {alertas.slice(0,5).map(function(a){
+            return <div key={a.id} style={{fontSize:12,color:"#555",marginBottom:3,display:"flex",gap:8,alignItems:"flex-start",flexWrap:"wrap"}}>
               <Badge color={isV?"#e24b4a":isH?"#ba7517":"#d97706"} label={a.label} />
-              <span>{a.titulo||(a.nota||"").slice(0,40)} — {clientName(a.cliente_id)} · <strong>{a.gestor}</strong></span>
+              <span><strong>{a.titulo||(a.nota||"").slice(0,30)}</strong>{" — "}{clientName(a.cliente_id)}{" · "}<strong>{a.gestor}</strong></span>
             </div>;
           })}
-          {alertas.length>3&&<div style={{fontSize:12,color:"#888",marginTop:4}}>…y {alertas.length-3} más</div>}
+          {alertas.length>5&&<div style={{fontSize:12,color:"#888",marginTop:4}}>…y {alertas.length-5} más</div>}
         </div>
         <button onClick={function(){setVisible(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#888",fontSize:18,marginLeft:12}}>×</button>
       </div>
@@ -410,16 +410,9 @@ function NotifBanner(props) {
 // ── FORM: Contactos múltiples ─────────────────────────────────────────────────
 function ContactosEditor(props) {
   var contactos=props.contactos, onChange=props.onChange;
-  function addContacto(){
-    onChange(contactos.concat([{nombre:"",telefono:"",email:"",sector:"",_new:true}]));
-  }
-  function updateContacto(i,field,value){
-    var updated=contactos.map(function(c,idx){return idx===i?Object.assign({},c,{[field]:value}):c;});
-    onChange(updated);
-  }
-  function removeContacto(i){
-    onChange(contactos.filter(function(_,idx){return idx!==i;}));
-  }
+  function addContacto(){onChange(contactos.concat([{nombre:"",telefono:"",email:"",sector:"",_new:true}]));}
+  function updateContacto(i,field,value){onChange(contactos.map(function(c,idx){return idx===i?Object.assign({},c,{[field]:value}):c;}));}
+  function removeContacto(i){onChange(contactos.filter(function(_,idx){return idx!==i;}));}
   return (
     <div>
       {contactos.map(function(c,i){
@@ -468,14 +461,11 @@ function ClienteForm(props) {
   var [form,setForm]=useState(function(){return Object.assign({},emptyC,{canal:config.canales[0]||"",grupo:config.grupos[0]||""},props.initial||{});});
   var [contactos,setContactos]=useState([]);
   var [errors,setErrors]=useState({});
-
-  // Cargar contactos existentes si es edición
   useEffect(function(){
     if(props.initial&&props.initial.id){
       sbGet("contactos","cliente_id=eq."+props.initial.id+"&order=id.asc").then(function(rows){setContactos(rows);}).catch(function(){});
     }
   },[]);
-
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
   function validate(){
     var errs={};
@@ -581,7 +571,11 @@ function DetalleCliente(props) {
     }
   },[cliente&&cliente.id]);
   var cActs=activities.filter(function(a){return a.cliente_id===cliente.id;}).sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
-  var dir=[cliente.calle,cliente.numero].filter(Boolean).join(" ")+([cliente.cp,cliente.ciudad].filter(Boolean).length?", "+[cliente.cp,cliente.ciudad].filter(Boolean).join(" "):""+(cliente.pais?", "+cliente.pais:""));
+  var dir="";
+  if(cliente.calle) dir+=cliente.calle;
+  if(cliente.numero) dir+=(dir?" ":"")+cliente.numero;
+  if(cliente.cp||cliente.ciudad) dir+=(dir?", ":"")+[cliente.cp,cliente.ciudad].filter(Boolean).join(" ");
+  if(cliente.pais) dir+=(dir?", ":"")+cliente.pais;
   return (
     <Card>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -608,7 +602,6 @@ function DetalleCliente(props) {
           {cliente.comentarios}
         </div>
       )}
-      {/* Contactos */}
       <Sep label={"Contactos ("+(contactos.length)+")"} />
       {contactos.length===0?<div style={{fontSize:12,color:"#888",marginBottom:8}}>Sin contactos registrados.</div>:
         contactos.map(function(c){
@@ -946,23 +939,37 @@ function CRM() {
     }).then(function(){setConfigState(function(prev){return Object.assign({},prev,{[key]:arr});});});
   }
 
+  // FIX: saveClient migra actividades si cambia línea de negocio
   function saveClient(form,contactos){
     setSaving(true);
+    var lineaAnterior=null;
+    if(form.id){
+      var clienteAnterior=clients.find(function(c){return c.id===form.id;});
+      if(clienteAnterior)lineaAnterior=clienteAnterior.linea_negocio;
+    }
     var body={nombre:form.nombre,nif:form.nif||null,calle:form.calle||null,numero:form.numero||null,cp:form.cp||null,ciudad:form.ciudad||null,pais:form.pais||"España",telefono:form.telefono||null,email:form.email||null,contacto:form.contacto||null,canal:form.canal||null,grupo:form.grupo||null,gestor:form.gestor||null,tipo_cliente:form.tipo_cliente||"Potencial",comentarios:form.comentarios||null,linea_negocio:form.linea_negocio||lineaActiva};
     var p;
-    if(form.id){p=sbPatch("clientes",form.id,body);}
-    else{
+    if(form.id){
+      p=sbPatch("clientes",form.id,body).then(function(){
+        // Si cambió la línea, migrar actividades del cliente a la nueva línea
+        if(lineaAnterior&&lineaAnterior!==body.linea_negocio){
+          return fetch(SB_URL+"/rest/v1/actividades?cliente_id=eq."+form.id,{
+            method:"PATCH",
+            headers:HDR,
+            body:JSON.stringify({linea_negocio:body.linea_negocio})
+          });
+        }
+      });
+    } else {
       var allCodes=clients.map(function(c){return c.codigo;}).filter(Boolean);
       var maxNum=allCodes.length?Math.max.apply(null,allCodes.map(function(c){return parseInt(c.replace("CL",""))||0;})):0;
       body.codigo="CL"+String(maxNum+1).padStart(6,"0");
       p=sbPost("clientes",body);
     }
     p.then(function(saved){
-      var clienteId=Array.isArray(saved)?saved[0].id:saved.id;
-      if(!clienteId&&form.id)clienteId=form.id;
-      // Guardar contactos: borrar los existentes y recrear
+      var clienteId=form.id||(Array.isArray(saved)?saved[0].id:saved.id);
       return sbDelWhere("contactos","cliente_id=eq."+clienteId).then(function(){
-        var validos=contactos.filter(function(c){return (c.nombre||"").trim();});
+        var validos=(contactos||[]).filter(function(c){return (c.nombre||"").trim();});
         if(!validos.length)return;
         var idx=0;
         function nextC(){
@@ -990,7 +997,6 @@ function CRM() {
     sbDel("actividades",id).then(function(){setActivities(function(prev){return prev.filter(function(a){return a.id!==id;});});}).catch(function(e){alert("Error: "+e.message);});
   }
 
-  // Clientes filtrados con búsqueda
   var filteredClients=useMemo(function(){
     var q=norm(busqueda);
     return clientsFiltLinea.filter(function(c){
@@ -998,14 +1004,11 @@ function CRM() {
       if(filter.grupo&&c.grupo!==filter.grupo)return false;
       if(filter.gestor&&c.gestor!==filter.gestor)return false;
       if(filter.tipo_cliente&&c.tipo_cliente!==filter.tipo_cliente)return false;
-      if(q){
-        return norm(c.nombre).indexOf(q)>=0||norm(c.nif||"").indexOf(q)>=0||norm(c.ciudad||"").indexOf(q)>=0||norm(c.gestor||"").indexOf(q)>=0||norm(c.contacto||"").indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0;
-      }
+      if(q){return norm(c.nombre).indexOf(q)>=0||norm(c.nif||"").indexOf(q)>=0||norm(c.ciudad||"").indexOf(q)>=0||norm(c.gestor||"").indexOf(q)>=0||norm(c.contacto||"").indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0;}
       return true;
     });
   },[clientsFiltLinea,filter,busqueda]);
 
-  // Reset página al cambiar filtros/búsqueda
   useEffect(function(){setPagina(1);},[busqueda,filter,lineaActiva]);
 
   var totalFiltrados=filteredClients.length;
@@ -1034,6 +1037,7 @@ function CRM() {
   var linGrad=LINEA_GRAD[lineaActiva]||LINEA_GRAD["La Sin Gluten"];
   var linLogo=LINEA_LOGO[lineaActiva]||LINEA_LOGO["La Sin Gluten"];
 
+  // FIX Dashboard: muestra título + nombre cliente, scroll, sin límite de 5
   function Dashboard(){
     var totalC=clientsFiltLinea.filter(function(c){return c.tipo_cliente==="Cliente"&&(!dashGestor||c.gestor===dashGestor);}).length;
     var totalP=clientsFiltLinea.filter(function(c){return c.tipo_cliente==="Potencial"&&(!dashGestor||c.gestor===dashGestor);}).length;
@@ -1061,7 +1065,18 @@ function CRM() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
         <Card>
           <div style={{fontSize:13,fontWeight:600,marginBottom:12,color:"#555"}}>Actividades pendientes{dashGestor?" — "+dashGestor:""}</div>
-          {actsPend.slice(0,5).map(function(a){return <div key={a.id} style={{display:"flex",gap:10,marginBottom:10}}><Badge color={TIPO_C[a.tipo]} label={a.tipo} /><div><div style={{fontSize:13}}>{a.titulo||clientName(a.cliente_id)}</div><div style={{fontSize:11,color:"#888"}}>{a.fecha} · <strong>{a.gestor}</strong></div></div></div>;})}
+          <div style={{maxHeight:300,overflowY:"auto"}}>
+            {actsPend.map(function(a){
+              return <div key={a.id} style={{display:"flex",gap:10,marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f5f5f5"}}>
+                <Badge color={TIPO_C[a.tipo]||"#888"} label={a.tipo} />
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.titulo||"(sin título)"}</div>
+                  <div style={{fontSize:12,color:"#555"}}>{clientName(a.cliente_id)}</div>
+                  <div style={{fontSize:11,color:"#888"}}>{a.fecha} · <strong>{a.gestor}</strong></div>
+                </div>
+              </div>;
+            })}
+          </div>
           {actsPend.length===0&&<div style={{fontSize:12,color:"#aaa"}}>Sin pendientes.</div>}
         </Card>
         <Card>
@@ -1079,7 +1094,6 @@ function CRM() {
       {clientPanel&&clientPanel!=="new"&&<ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={function(){setClientPanel(null);}} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
       {detalleId&&!clientPanel&&<DetalleCliente cliente={clients.find(function(c){return c.id===detalleId;})} activities={activitiesFiltLinea} onClose={function(){setDetalleId(null);}} />}
       {!clientPanel&&!showImportCli&&<div>
-        {/* BUSCADOR */}
         <div style={{marginBottom:12}}>
           <div style={{position:"relative"}}>
             <input value={busqueda} onChange={function(e){setBusqueda(e.target.value);}} placeholder="🔍 Buscar por nombre, NIF, ciudad, gestor o código…"
@@ -1089,7 +1103,6 @@ function CRM() {
           </div>
           {busqueda&&<div style={{fontSize:12,color:"#888",marginTop:4}}>{totalFiltrados} resultado{totalFiltrados!==1?"s":""} encontrado{totalFiltrados!==1?"s":""}</div>}
         </div>
-        {/* FILTROS */}
         <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
           <Sel value={filter.tipo_cliente} onChange={function(v){setFilter(function(f){return Object.assign({},f,{tipo_cliente:v});});}} options={TIPOS_CLI} placeholder="Tipo" />
           <Sel value={filter.canal}        onChange={function(v){setFilter(function(f){return Object.assign({},f,{canal:v});});}}        options={config.canales}  placeholder="Canal" />
@@ -1098,7 +1111,6 @@ function CRM() {
           <Btn onClick={function(){setFilter({canal:"",grupo:"",gestor:"",tipo_cliente:""});setBusqueda("");}}>Limpiar</Btn>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <Btn variant="success" onClick={function(){
-              // Exportar TODOS los filtrados (sin paginación)
               dlXLSX(filteredClients.map(function(c){return {"Código":c.codigo||"","Nombre empresa":c.nombre||"","NIF":c.nif||"","Tipo":c.tipo_cliente||"","Calle":c.calle||"","Número":c.numero||"","CP":c.cp||"","Ciudad":c.ciudad||"","País":c.pais||"","Teléfono":c.telefono||"","Email":c.email||"","Contacto":c.contacto||"","Canal":c.canal||"","Grupo":c.grupo||"","Gestor":c.gestor||"","Comentarios":c.comentarios||"","Línea":c.linea_negocio||""};}),
               "Clientes","clientes_"+lineaActiva.replace(/ /g,"_")+"_"+new Date().toISOString().slice(0,10)+".xlsx");
             }}>⬇ Excel ({filteredClients.length})</Btn>
@@ -1106,7 +1118,6 @@ function CRM() {
             <Btn variant="primary" onClick={function(){setDetalleId(null);setShowImportCli(false);setClientPanel("new");}}>+ Nuevo</Btn>
           </div>
         </div>
-        {/* TABLA */}
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:"#fff",borderRadius:10}}>
             <thead style={{background:"#f9f9f9"}}>
