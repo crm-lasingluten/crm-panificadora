@@ -50,7 +50,8 @@ const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
 const TIPOS_CLI   = ["Potencial","Cliente","Inactivo"];
 const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Pedidos","Informes","Configuración"];
-const IVA_TIPOS   = [{"label":"21%","value":21},{"label":"10%","value":10},{"label":"4%","value":4}];
+const IVA_TIPOS      = [{"label":"21%","value":21},{"label":"10%","value":10},{"label":"4%","value":4}];
+const UNIDADES_MEDIDA = ["Unidad","Caja","Saco","Pallet"];
 const EMPRESA_INFO = {
   "La Sin Gluten": { razon:"Panificadora La Sin Gluten SL", nif:"B26916890", direccion:"Travessia Industrial 191, 08907, Hospitalet de Llobregat, Barcelona, España", telefono:"931592650" },
   "Bauer Lemans":  { razon:"Bauer Lemans SL",              nif:"B66336264", direccion:"Travessia Industrial 191, 08907, Hospitalet de Llobregat, Barcelona, España", telefono:"931592650" }
@@ -908,7 +909,7 @@ function usePedidosData(lineaActiva) {
 
 // ── Gestión de Productos y Listas (dentro de Configuración o Pedidos) ─────────
 function ProductosManager(props) {
-  var {linColor,lineaActiva}=props;
+  var {linColor,lineaActiva,currentUser}=props;
   var [productos,setProductos]=useState([]);
   var [listas,setListas]=useState([]);
   var [precios,setPrecios]=useState([]);
@@ -916,7 +917,13 @@ function ProductosManager(props) {
   var [editProd,setEditProd]=useState(null);
   var [editLista,setEditLista]=useState(null);
   var [saving,setSaving]=useState(false);
-  var emptyProd={codigo:"",nombre:"",descripcion:"",unidad:"ud",linea_negocio:lineaActiva,activo:true};
+
+  // Líneas visibles según usuario
+  var lineasVisibles=currentUser&&currentUser.lineas?currentUser.lineas:LINEAS;
+  var [lineaFiltro,setLineaFiltro]=useState(lineaActiva);
+
+  var emptyProd={codigo:"",nombre:"",descripcion:"",unidad_medida:"Unidad",linea_negocio:lineaActiva,activo:true,
+    presentacion:"",sacos_por_pallet:"",unidades_por_caja:"",unidades_por_pallet:"",caducidad_meses:"",iva_producto:21};
   var emptyLista={nombre:"",linea_negocio:lineaActiva,activo:true};
 
   function reload(){
@@ -930,7 +937,17 @@ function ProductosManager(props) {
 
   function saveProd(f){
     setSaving(true);
-    var body={codigo:f.codigo,nombre:f.nombre,descripcion:f.descripcion||null,unidad:f.unidad||"ud",linea_negocio:f.linea_negocio||lineaActiva,activo:true};
+    var body={
+      codigo:f.codigo,nombre:f.nombre,descripcion:f.descripcion||null,
+      unidad_medida:f.unidad_medida||"Unidad",
+      linea_negocio:f.linea_negocio||lineaActiva,activo:true,
+      presentacion:f.presentacion||null,
+      sacos_por_pallet:f.sacos_por_pallet?parseFloat(f.sacos_por_pallet):null,
+      unidades_por_caja:f.unidades_por_caja?parseFloat(f.unidades_por_caja):null,
+      unidades_por_pallet:f.unidades_por_pallet?parseFloat(f.unidades_por_pallet):null,
+      caducidad_meses:f.caducidad_meses?parseInt(f.caducidad_meses):null,
+      iva_producto:parseFloat(f.iva_producto||21),
+    };
     var p=f.id?sbPatch("productos",f.id,body):sbPost("productos",body);
     p.then(function(){reload();setEditProd(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
@@ -950,10 +967,26 @@ function ProductosManager(props) {
   }
   function getPrecio(prodId,listaId){var p=precios.find(function(x){return x.producto_id===prodId&&x.lista_id===listaId;});return p?p.precio:"";}
 
-  var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaActiva;});
-  var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaActiva;});
+  var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaFiltro;});
+  var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaFiltro;});
+
+  // Selector de línea visible cuando el usuario tiene acceso a ambas
+  function LineaSelector(){
+    if(lineasVisibles.length<=1)return null;
+    return <div style={{display:"flex",gap:4,background:"#f5f5f5",borderRadius:20,padding:3,marginBottom:16,width:"fit-content"}}>
+      {lineasVisibles.map(function(l){
+        return <button key={l} onClick={function(){setLineaFiltro(l);}}
+          style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,
+            background:lineaFiltro===l?(LINEA_COLOR[l]||linColor):"transparent",
+            color:lineaFiltro===l?"#fff":"#666"}}>
+          {l}
+        </button>;
+      })}
+    </div>;
+  }
 
   return <div>
+    <LineaSelector />
     <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"1px solid #eee"}}>
       {[["productos","📦 Productos"],["listas","📋 Listas de precio"],["tabla","💰 Tabla de precios"]].map(function(item){
         return <button key={item[0]} onClick={function(){setTab(item[0]);}}
@@ -965,15 +998,41 @@ function ProductosManager(props) {
 
     {tab==="productos"&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <span style={{fontSize:13,color:"#555"}}>Productos de <strong>{lineaActiva}</strong> ({prodFilt.length})</span>
-        <Btn variant="primary" onClick={function(){setEditProd(Object.assign({},emptyProd));}}>+ Producto</Btn>
+        <span style={{fontSize:13,color:"#555"}}>Productos de <strong>{lineaFiltro}</strong> ({prodFilt.length})</span>
+        <Btn variant="primary" onClick={function(){setEditProd(Object.assign({},emptyProd,{linea_negocio:lineaFiltro}));}}>+ Producto</Btn>
       </div>
       {editProd&&<Card style={{marginBottom:16,border:"1px solid "+linColor+"44"}}>
         <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>{editProd.id?"Editar producto":"Nuevo producto"}</div>
         <FRow>
-          <FL label="Código" flex={1}><Inp value={editProd.codigo} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{codigo:v});});}} placeholder="PROD001" /></FL>
-          <FL label="Nombre" flex={3}><Inp value={editProd.nombre} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Nombre del producto" /></FL>
-          <FL label="Unidad" flex={1}><Inp value={editProd.unidad} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidad:v});});}} placeholder="ud / kg / cj" /></FL>
+          <FL label="Código *" flex={1}><Inp value={editProd.codigo} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{codigo:v});});}} placeholder="PROD001" /></FL>
+          <FL label="Nombre *" flex={3}><Inp value={editProd.nombre} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Nombre del producto" /></FL>
+          <FL label="Línea" flex={1}>
+            <select value={editProd.linea_negocio} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{linea_negocio:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {lineasVisibles.map(function(l){return <option key={l} value={l}>{l}</option>;})}
+            </select>
+          </FL>
+        </FRow>
+        <FRow>
+          <FL label="Presentación (ej: Kg, 500g, 1L)" flex={2}><Inp value={editProd.presentacion||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{presentacion:v});});}} placeholder="Ej: 500g, 1 Kg, 5L…" /></FL>
+          <FL label="Unidad de medida" flex={1}>
+            <select value={editProd.unidad_medida||"Unidad"} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{unidad_medida:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {UNIDADES_MEDIDA.map(function(u){return <option key={u} value={u}>{u}</option>;})}
+            </select>
+          </FL>
+          <FL label="IVA del producto" flex={1}>
+            <select value={editProd.iva_producto||21} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{iva_producto:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {IVA_TIPOS.map(function(i){return <option key={i.value} value={i.value}>{i.label}</option>;})}
+            </select>
+          </FL>
+        </FRow>
+        <FRow>
+          <FL label="Uds. por caja" flex={1}><Inp type="number" value={editProd.unidades_por_caja||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidades_por_caja:v});});}} placeholder="0" /></FL>
+          <FL label="Sacos por pallet" flex={1}><Inp type="number" value={editProd.sacos_por_pallet||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{sacos_por_pallet:v});});}} placeholder="0" /></FL>
+          <FL label="Uds. por pallet" flex={1}><Inp type="number" value={editProd.unidades_por_pallet||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidades_por_pallet:v});});}} placeholder="0" /></FL>
+          <FL label="Caducidad (meses)" flex={1}><Inp type="number" value={editProd.caducidad_meses||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{caducidad_meses:v});});}} placeholder="0" /></FL>
         </FRow>
         <FRow>
           <FL label="Descripción"><Inp value={editProd.descripcion||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{descripcion:v});});}} placeholder="Descripción opcional" /></FL>
@@ -983,32 +1042,53 @@ function ProductosManager(props) {
           <Btn onClick={function(){setEditProd(null);}}>Cancelar</Btn>
         </div>
       </Card>}
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:"#fff",borderRadius:10}}>
-        <thead style={{background:"#f9f9f9"}}><tr>{["Código","Nombre","Descripción","Unidad",""].map(function(h){return <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee"}}>{h}</th>;})}</tr></thead>
-        <tbody>{prodFilt.map(function(p){
-          return <tr key={p.id} style={{borderBottom:"1px solid #f5f5f5"}}>
-            <td style={{padding:"8px 10px",fontFamily:"monospace",fontSize:11,color:linColor,fontWeight:600}}>{p.codigo}</td>
-            <td style={{padding:"8px 10px",fontWeight:500}}>{p.nombre}</td>
-            <td style={{padding:"8px 10px",color:"#888",fontSize:12}}>{p.descripcion||"—"}</td>
-            <td style={{padding:"8px 10px"}}><Badge color="#7f77dd" label={p.unidad||"ud"} /></td>
-            <td style={{padding:"8px 10px",textAlign:"right",display:"flex",gap:6,justifyContent:"flex-end"}}>
-              <Btn onClick={function(){setEditProd(Object.assign({},p));}} style={{fontSize:11,padding:"4px 10px"}}>✏️</Btn>
-              <Btn variant="danger" onClick={function(){deleteProd(p.id);}} style={{fontSize:11,padding:"4px 10px"}}>🗑️</Btn>
-            </td>
-          </tr>;
-        })}</tbody>
-      </table>
-      {!prodFilt.length&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>No hay productos. Crea el primero.</div>}
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,background:"#fff",borderRadius:10}}>
+          <thead style={{background:"#f9f9f9"}}><tr>
+            {["Código","Nombre","Presentación","Unidad","Uds/Caja","Sacos/Pallet","Uds/Pallet","Caducidad","IVA",""].map(function(h){
+              return <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>;
+            })}
+          </tr></thead>
+          <tbody>{prodFilt.map(function(p){
+            return <tr key={p.id} style={{borderBottom:"1px solid #f5f5f5"}}>
+              <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:11,color:linColor,fontWeight:600}}>{p.codigo}</td>
+              <td style={{padding:"7px 10px",fontWeight:500,whiteSpace:"nowrap"}}>{p.nombre}</td>
+              <td style={{padding:"7px 10px",color:"#666"}}>{p.presentacion||"—"}</td>
+              <td style={{padding:"7px 10px"}}><Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} /></td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.unidades_por_caja||"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.sacos_por_pallet||"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.unidades_por_pallet||"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.caducidad_meses?p.caducidad_meses+" m":"—"}</td>
+              <td style={{padding:"7px 10px"}}><Badge color="#ba7517" label={(p.iva_producto||21)+"%"} /></td>
+              <td style={{padding:"7px 6px"}}>
+                <div style={{display:"flex",gap:4}}>
+                  <Btn onClick={function(){setEditProd(Object.assign({},p));}} style={{fontSize:11,padding:"3px 8px"}}>✏️</Btn>
+                  <Btn variant="danger" onClick={function(){deleteProd(p.id);}} style={{fontSize:11,padding:"3px 8px"}}>🗑️</Btn>
+                </div>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      {!prodFilt.length&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>No hay productos para <strong>{lineaFiltro}</strong>. Crea el primero.</div>}
     </div>}
 
     {tab==="listas"&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <span style={{fontSize:13,color:"#555"}}>Listas de <strong>{lineaActiva}</strong> ({listasFilt.length})</span>
-        <Btn variant="primary" onClick={function(){setEditLista(Object.assign({},emptyLista));}}>+ Lista</Btn>
+        <span style={{fontSize:13,color:"#555"}}>Listas de <strong>{lineaFiltro}</strong> ({listasFilt.length})</span>
+        <Btn variant="primary" onClick={function(){setEditLista(Object.assign({},emptyLista,{linea_negocio:lineaFiltro}));}}>+ Lista</Btn>
       </div>
       {editLista&&<Card style={{marginBottom:16,border:"1px solid "+linColor+"44"}}>
         <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>{editLista.id?"Editar lista":"Nueva lista de precio"}</div>
-        <FRow><FL label="Nombre de la lista"><Inp value={editLista.nombre} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Ej: Tarifa General, Canal Farmacia…" /></FL></FRow>
+        <FRow>
+          <FL label="Nombre de la lista" flex={2}><Inp value={editLista.nombre} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Ej: Tarifa General, Canal Farmacia…" /></FL>
+          <FL label="Línea" flex={1}>
+            <select value={editLista.linea_negocio} onChange={function(e){setEditLista(function(f){return Object.assign({},f,{linea_negocio:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {lineasVisibles.map(function(l){return <option key={l} value={l}>{l}</option>;})}
+            </select>
+          </FL>
+        </FRow>
         <div style={{display:"flex",gap:8}}>
           <Btn variant="primary" onClick={function(){saveLista(editLista);}} disabled={saving||!editLista.nombre}>{saving?"Guardando…":"Guardar"}</Btn>
           <Btn onClick={function(){setEditLista(null);}}>Cancelar</Btn>
@@ -1017,30 +1097,33 @@ function ProductosManager(props) {
       <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
         {listasFilt.map(function(l){
           return <div key={l.id} style={{padding:"12px 16px",background:"#fff",border:"1px solid #e8e8e8",borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
+            <Badge color={LINEA_COLOR[l.linea_negocio]||"#888"} label={l.linea_negocio} />
             <span style={{fontSize:13,fontWeight:600}}>{l.nombre}</span>
             <Btn onClick={function(){setEditLista(Object.assign({},l));}} style={{fontSize:11,padding:"3px 8px"}}>✏️</Btn>
             <Btn variant="danger" onClick={function(){deleteLista(l.id);}} style={{fontSize:11,padding:"3px 8px"}}>🗑️</Btn>
           </div>;
         })}
-        {!listasFilt.length&&<div style={{color:"#aaa",fontSize:13}}>No hay listas de precio.</div>}
+        {!listasFilt.length&&<div style={{color:"#aaa",fontSize:13}}>No hay listas de precio para <strong>{lineaFiltro}</strong>.</div>}
       </div>
     </div>}
 
     {tab==="tabla"&&<div>
-      <div style={{fontSize:13,color:"#555",marginBottom:12}}>Precios por producto y lista — <strong>{lineaActiva}</strong></div>
+      <div style={{fontSize:13,color:"#555",marginBottom:12}}>Precios por producto y lista — <strong>{lineaFiltro}</strong></div>
       {(!prodFilt.length||!listasFilt.length)
-        ?<div style={{color:"#aaa",fontSize:13,padding:"1rem"}}>Necesitas al menos un producto y una lista de precio para configurar la tabla.</div>
+        ?<div style={{color:"#aaa",fontSize:13,padding:"1rem"}}>Necesitas al menos un producto y una lista de precio en <strong>{lineaFiltro}</strong> para configurar la tabla.</div>
         :<div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:12,background:"#fff",borderRadius:10,minWidth:400}}>
             <thead style={{background:"#f9f9f9"}}>
               <tr>
                 <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>Producto</th>
+                <th style={{padding:"8px 12px",fontWeight:600,color:"#888",borderBottom:"1px solid #eee",fontSize:11}}>Unidad</th>
                 {listasFilt.map(function(l){return <th key={l.id} style={{padding:"8px 12px",textAlign:"center",fontWeight:600,color:linColor,borderBottom:"1px solid #eee",whiteSpace:"nowrap",minWidth:110}}>{l.nombre}</th>;})}
               </tr>
             </thead>
             <tbody>{prodFilt.map(function(p){
               return <tr key={p.id} style={{borderBottom:"1px solid #f5f5f5"}}>
-                <td style={{padding:"7px 12px",fontWeight:500,whiteSpace:"nowrap"}}>{p.nombre}<span style={{marginLeft:6,fontSize:11,color:"#aaa"}}>{p.unidad}</span></td>
+                <td style={{padding:"7px 12px",fontWeight:500,whiteSpace:"nowrap"}}>{p.nombre}{p.presentacion&&<span style={{marginLeft:6,fontSize:11,color:"#aaa"}}>{p.presentacion}</span>}</td>
+                <td style={{padding:"7px 12px"}}><Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} /></td>
                 {listasFilt.map(function(l){
                   var val=getPrecio(p.id,l.id);
                   return <td key={l.id} style={{padding:"4px 8px",textAlign:"center"}}>
@@ -1062,14 +1145,15 @@ function ProductosManager(props) {
 
 // ── Editor de pedido/proforma ─────────────────────────────────────────────────
 function PedidoEditor(props) {
-  var {clients,lineaActiva,linColor,currentUser,onSaved,onCancel,initial}=props;
+  var {clients,lineaActiva,linColor,currentUser,onSaved,onCancel,initial,config}=props;
   var [productos,setProductos]=useState([]);
   var [listas,setListas]=useState([]);
   var [precios,setPrecios]=useState([]);
   var [saving,setSaving]=useState(false);
   var [busqCli,setBusqCli]=useState("");
+  var [showDropdown,setShowDropdown]=useState(false);
 
-  var initForm={tipo:"pedido",cliente_id:"",lista_id:"",fecha:tod(),fecha_entrega:"",direccion_entrega:"",observaciones:"",iva:21,gestor:currentUser.nombre,linea_negocio:lineaActiva};
+  var initForm={tipo:"pedido",cliente_id:"",lista_id:"",fecha:tod(),fecha_entrega:"",direccion_entrega:"",observaciones:"",gestor:currentUser.nombre,linea_negocio:lineaActiva};
   var [form,setForm]=useState(initial?Object.assign({},initForm,initial):initForm);
   var [lineas,setLineas]=useState(initial&&initial._lineas?initial._lineas:[]);
 
@@ -1081,9 +1165,17 @@ function PedidoEditor(props) {
     ]).then(function(r){setProductos(r[0]);setListas(r[1]);setPrecios(r[2]);});
   },[lineaActiva]);
 
+  // Si hay cliente inicial, pre-rellenar búsqueda
+  useEffect(function(){
+    if(initial&&initial.cliente_id){
+      var c=clients.find(function(x){return x.id===parseInt(initial.cliente_id);});
+      if(c)setBusqCli(c.nombre);
+    }
+  },[]);
+
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
 
-  function getPrecio(prodId,listaId){
+  function getPrecioLista(prodId,listaId){
     if(!listaId)return 0;
     var p=precios.find(function(x){return x.producto_id===prodId&&x.lista_id===parseInt(listaId);});
     return p?p.precio:0;
@@ -1091,41 +1183,57 @@ function PedidoEditor(props) {
 
   function addLinea(prod){
     if(lineas.find(function(l){return l.producto_id===prod.id;}))return;
-    var precio=getPrecio(prod.id,form.lista_id);
-    setLineas(function(prev){return prev.concat([{producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,unidad:prod.unidad,cantidad:1,precio:precio,subtotal:precio}]);});
+    var precio=getPrecioLista(prod.id,form.lista_id);
+    var iva=parseFloat(prod.iva_producto||21);
+    setLineas(function(prev){return prev.concat([{
+      producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,
+      unidad_medida:prod.unidad_medida||"Unidad",
+      cantidad:1,precio:precio,iva:iva,
+      subtotal:precio,iva_importe:precio*iva/100,total_linea:precio*(1+iva/100)
+    }]);});
   }
 
   function updateLinea(idx,k,v){
     setLineas(function(prev){
-      var next=prev.map(function(l,i){
+      return prev.map(function(l,i){
         if(i!==idx)return l;
-        var upd=Object.assign({},l,{[k]:v});
-        upd.subtotal=parseFloat(upd.cantidad||0)*parseFloat(upd.precio||0);
+        var upd=Object.assign({},l,{[k]:parseFloat(v)||0});
+        upd.subtotal=upd.cantidad*upd.precio;
+        upd.iva_importe=upd.subtotal*(upd.iva||21)/100;
+        upd.total_linea=upd.subtotal+upd.iva_importe;
         return upd;
       });
-      return next;
     });
   }
 
   function removeLinea(idx){setLineas(function(prev){return prev.filter(function(_,i){return i!==idx;});});}
 
-  // Cuando cambia la lista de precio, actualizar precios de líneas existentes
   function handleListaChange(listaId){
     set("lista_id",listaId);
     setLineas(function(prev){return prev.map(function(l){
       var p=precios.find(function(x){return x.producto_id===l.producto_id&&x.lista_id===parseInt(listaId);});
       var precio=p?p.precio:l.precio;
-      return Object.assign({},l,{precio:precio,subtotal:parseFloat(l.cantidad||0)*precio});
+      var iva=l.iva||21;
+      var subtotal=parseFloat(l.cantidad||0)*precio;
+      return Object.assign({},l,{precio:precio,subtotal:subtotal,iva_importe:subtotal*iva/100,total_linea:subtotal*(1+iva/100)});
     });});
   }
 
-  var subtotal=lineas.reduce(function(s,l){return s+(l.subtotal||0);},0);
-  var totalIva=form.tipo==="proforma"?(subtotal*parseFloat(form.iva||0)/100):0;
-  var total=form.tipo==="proforma"?subtotal+totalIva:0;
+  // Totales agrupados por IVA (proforma)
+  var subtotalBase=lineas.reduce(function(s,l){return s+(l.subtotal||0);},0);
+  var gruposIva=lineas.reduce(function(acc,l){
+    var k=l.iva||21;
+    if(!acc[k])acc[k]={base:0,iva:0};
+    acc[k].base+=l.subtotal||0;
+    acc[k].iva+=l.iva_importe||0;
+    return acc;
+  },{});
+  var totalIvaSum=Object.values(gruposIva).reduce(function(s,g){return s+g.iva;},0);
+  var totalFinal=subtotalBase+totalIvaSum;
 
   var clientesFilt=useMemo(function(){
     var q=norm(busqCli);
-    return clients.filter(function(c){return c.linea_negocio===lineaActiva&&(c.tipo_cliente!=="Inactivo")&&(!q||norm(c.nombre).indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0);});
+    return clients.filter(function(c){return c.linea_negocio===lineaActiva&&(!q||norm(c.nombre).indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0);});
   },[clients,lineaActiva,busqCli]);
 
   var clienteSel=clients.find(function(c){return c.id===parseInt(form.cliente_id);});
@@ -1133,42 +1241,30 @@ function PedidoEditor(props) {
   function handleSave(){
     if(!form.cliente_id||!lineas.length){alert("Selecciona un cliente y añade al menos un producto.");return;}
     setSaving(true);
-
-    // Generar número correlativo
     var prefix=form.tipo==="pedido"?"PED":"PRF";
     sbGet("pedidos","tipo=eq."+form.tipo+"&select=numero&order=id.desc&limit=1").then(function(rows){
       var lastNum=0;
-      if(rows.length&&rows[0].numero){
-        var m=rows[0].numero.match(/(\d+)$/);
-        if(m)lastNum=parseInt(m[1]);
-      }
+      if(rows.length&&rows[0].numero){var m=rows[0].numero.match(/(\d+)$/);if(m)lastNum=parseInt(m[1]);}
       var numero=prefix+"-"+lineaActiva.replace(/\s+/g,"").toUpperCase().slice(0,3)+"-"+String(lastNum+1).padStart(5,"0");
-
-      var body={numero:numero,tipo:form.tipo,cliente_id:parseInt(form.cliente_id),lista_id:form.lista_id?parseInt(form.lista_id):null,fecha:form.fecha,fecha_entrega:form.fecha_entrega||null,direccion_entrega:form.direccion_entrega||null,observaciones:form.observaciones||null,iva:parseFloat(form.iva||21),subtotal:subtotal,total_iva:totalIva,total:total,gestor:form.gestor||currentUser.nombre,linea_negocio:lineaActiva,estado:"Borrador"};
-
+      var body={numero:numero,tipo:form.tipo,cliente_id:parseInt(form.cliente_id),lista_id:form.lista_id?parseInt(form.lista_id):null,fecha:form.fecha,fecha_entrega:form.fecha_entrega||null,direccion_entrega:form.direccion_entrega||null,observaciones:form.observaciones||null,iva:21,subtotal:subtotalBase,total_iva:totalIvaSum,total:totalFinal,gestor:form.gestor||currentUser.nombre,linea_negocio:lineaActiva,estado:"Borrador"};
       var saveP=form.id?sbPatch("pedidos",form.id,body):sbPost("pedidos",body);
       return saveP.then(function(saved){
         var pedidoId=form.id||(Array.isArray(saved)?saved[0].id:saved.id);
-        // Borrar líneas anteriores si edición
         var delP=form.id?sbDelWhere("pedido_lineas","pedido_id=eq."+pedidoId):Promise.resolve();
         return delP.then(function(){
           var idx=0;
           function nextL(){
             if(idx>=lineas.length)return Promise.resolve({id:pedidoId,numero:numero});
             var l=lineas[idx++];
-            return sbPost("pedido_lineas",{pedido_id:pedidoId,producto_id:l.producto_id,codigo:l.codigo,nombre:l.nombre,unidad:l.unidad,cantidad:l.cantidad,precio:form.tipo==="proforma"?l.precio:0,subtotal:form.tipo==="proforma"?l.subtotal:0}).then(nextL);
+            return sbPost("pedido_lineas",{pedido_id:pedidoId,producto_id:l.producto_id,codigo:l.codigo,nombre:l.nombre,unidad:l.unidad_medida,cantidad:l.cantidad,precio:form.tipo==="proforma"?l.precio:0,subtotal:form.tipo==="proforma"?l.subtotal:0,iva_linea:l.iva,iva_importe:form.tipo==="proforma"?l.iva_importe:0,total_linea:form.tipo==="proforma"?l.total_linea:0}).then(nextL);
           }
           return nextL();
         });
       });
-    }).then(function(result){
-      setSaving(false);
-      onSaved(result);
-    }).catch(function(e){alert("Error: "+e.message);setSaving(false);});
+    }).then(function(result){setSaving(false);onSaved(result);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
 
-  var busqRef=useRef();
-  var [showDropdown,setShowDropdown]=useState(false);
+  var gestores=config&&config.gestores?config.gestores:[currentUser.nombre];
 
   return <Card>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -1192,20 +1288,19 @@ function PedidoEditor(props) {
         <div style={{fontSize:12,color:"#666",marginBottom:4}}>Cliente *</div>
         <div style={{position:"relative"}}>
           <input value={busqCli} onChange={function(e){setBusqCli(e.target.value);setShowDropdown(true);}} onFocus={function(){setShowDropdown(true);}}
-            placeholder="🔍 Buscar cliente…" ref={busqRef}
+            placeholder="🔍 Buscar cliente…"
             style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%"}} />
           {showDropdown&&busqCli.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #ddd",borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.1)",zIndex:100,maxHeight:200,overflowY:"auto"}}>
             {clientesFilt.slice(0,20).map(function(c){
               return <div key={c.id} onClick={function(){set("cliente_id",c.id);setBusqCli(c.nombre);setShowDropdown(false);
-                // Auto-rellenar dirección entrega
                 var dir=[c.calle,c.numero].filter(Boolean).join(" ");
                 if(c.cp||c.ciudad)dir+=(dir?", ":"")+[c.cp,c.ciudad].filter(Boolean).join(" ");
                 if(c.pais)dir+=(dir?", ":"")+c.pais;
+                if(!form.direccion_entrega)set("direccion_entrega",dir);
               }}
                 style={{padding:"8px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f5f5f5"}}
                 onMouseEnter={function(e){e.currentTarget.style.background="#f5f5f5";}}
-                onMouseLeave={function(e){e.currentTarget.style.background="";}}
-              >
+                onMouseLeave={function(e){e.currentTarget.style.background="";}}>
                 <span style={{fontWeight:500}}>{c.nombre}</span>
                 {c.codigo&&<span style={{fontSize:11,color:"#888",marginLeft:6}}>{c.codigo}</span>}
               </div>;
@@ -1213,35 +1308,43 @@ function PedidoEditor(props) {
             {clientesFilt.length===0&&<div style={{padding:"8px 12px",color:"#aaa",fontSize:12}}>Sin resultados</div>}
           </div>}
         </div>
-        {clienteSel&&<div style={{marginTop:8,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,fontSize:12,border:"1px solid #86efac"}}>
-          <div style={{fontWeight:600}}>{clienteSel.nombre}</div>
-          <div style={{color:"#555"}}>{[clienteSel.calle,clienteSel.numero].filter(Boolean).join(" ")}{(clienteSel.cp||clienteSel.ciudad)?", "+[clienteSel.cp,clienteSel.ciudad].filter(Boolean).join(" "):""}{clienteSel.pais?", "+clienteSel.pais:""}</div>
+        {clienteSel&&<div style={{marginTop:8,padding:"10px 12px",background:"#f0fdf4",borderRadius:8,fontSize:12,border:"1px solid #86efac"}}>
+          <div style={{fontWeight:700,fontSize:13}}>{clienteSel.nombre}</div>
+          {clienteSel.codigo&&<div style={{color:"#888",fontSize:11}}>Cód: {clienteSel.codigo}</div>}
+          <div style={{color:"#555",marginTop:2}}>
+            {[clienteSel.calle,clienteSel.numero].filter(Boolean).join(" ")}
+            {(clienteSel.cp||clienteSel.ciudad)?", "+[clienteSel.cp,clienteSel.ciudad].filter(Boolean).join(" "):""}
+            {clienteSel.pais?", "+clienteSel.pais:""}
+          </div>
           {clienteSel.telefono&&<div style={{color:"#555"}}>📞 {clienteSel.telefono}</div>}
+          {clienteSel.email&&<div style={{color:"#555"}}>✉️ {clienteSel.email}</div>}
+          {clienteSel.nif&&<div style={{color:"#555"}}>NIF: {clienteSel.nif}</div>}
+          {clienteSel.persona_contacto&&<div style={{color:"#555"}}>Contacto: {clienteSel.persona_contacto}</div>}
         </div>}
       </div>
 
-      {/* Datos del documento */}
+      {/* Datos documento */}
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <FRow>
           <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={function(v){set("fecha",v);}} /></FL>
           <FL label="Fecha entrega" flex={1}><Inp type="date" value={form.fecha_entrega} onChange={function(v){set("fecha_entrega",v);}} /></FL>
         </FRow>
-        <FRow>
-          <FL label="Lista de precio" flex={2}><select value={form.lista_id} onChange={function(e){handleListaChange(e.target.value);}}
+        <FL label="Lista de precio">
+          <select value={form.lista_id} onChange={function(e){handleListaChange(e.target.value);}}
             style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
             <option value="">— Sin lista —</option>
             {listas.map(function(l){return <option key={l.id} value={l.id}>{l.nombre}</option>;})}
-          </select></FL>
-          {form.tipo==="proforma"&&<FL label="IVA" flex={1}><select value={form.iva} onChange={function(e){set("iva",e.target.value);}}
+          </select>
+        </FL>
+        <FL label="Gestor">
+          <select value={form.gestor} onChange={function(e){set("gestor",e.target.value);}}
             style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
-            {IVA_TIPOS.map(function(i){return <option key={i.value} value={i.value}>{i.label}</option>;})}
-          </select></FL>}
-        </FRow>
-        <FL label="Gestor"><Sel value={form.gestor} onChange={function(v){set("gestor",v);}} options={props.config?props.config.gestores:[currentUser.nombre]} /></FL>
+            {gestores.map(function(g){return <option key={g} value={g}>{g}</option>;})}
+          </select>
+        </FL>
       </div>
     </div>
 
-    {/* Dirección de entrega */}
     <FRow>
       <FL label="Dirección de entrega">
         <Textarea value={form.direccion_entrega||""} onChange={function(v){set("direccion_entrega",v);}} placeholder="Dirección de entrega (si es diferente a la del cliente)" rows={2} />
@@ -1260,36 +1363,56 @@ function PedidoEditor(props) {
         var yaEsta=lineas.some(function(l){return l.producto_id===p.id;});
         return <button key={p.id} onClick={function(){if(!yaEsta)addLinea(p);}}
           style={{padding:"5px 12px",borderRadius:16,border:"1px solid "+(yaEsta?linColor+"66":"#ddd"),background:yaEsta?linColor+"11":"#fff",cursor:yaEsta?"default":"pointer",fontSize:12,color:yaEsta?linColor:"#444"}}>
-          {p.nombre} <span style={{fontSize:11,color:"#999"}}>{p.unidad}</span> {yaEsta&&"✓"}
+          <span style={{fontWeight:500}}>{p.nombre}</span>
+          {p.presentacion&&<span style={{fontSize:11,color:"#999",marginLeft:4}}>{p.presentacion}</span>}
+          <span style={{fontSize:11,color:"#bbb",marginLeft:4}}>{p.unidad_medida||"Unidad"}</span>
+          {yaEsta&&" ✓"}
         </button>;
       })}
-      {!productos.length&&<div style={{fontSize:12,color:"#aaa"}}>No hay productos. Créalos en la sección de Configuración → Pedidos.</div>}
+      {!productos.length&&<div style={{fontSize:12,color:"#aaa"}}>No hay productos. Créalos en ⚙️ Productos y precios.</div>}
     </div>
 
     {/* Tabla de líneas */}
     {lineas.length>0&&<div>
       <Sep label="Líneas del documento" />
       <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead style={{background:"#f9f9f9"}}>
             <tr>
-              {["Código","Producto","Unidad","Cantidad",form.tipo==="proforma"?"Precio":"",form.tipo==="proforma"?"Subtotal":"",""].map(function(h,i){return h?<th key={i} style={{padding:"7px 10px",textAlign:i>=3?"right":"left",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee"}}>{h}</th>:<th key={i} style={{width:36,borderBottom:"1px solid #eee"}} />;})}
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Código</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Producto</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Unidad</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Cantidad</th>
+              {form.tipo==="proforma"&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Precio</th>}
+              {form.tipo==="proforma"&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>IVA%</th>}
+              {form.tipo==="proforma"&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Base</th>}
+              {form.tipo==="proforma"&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Total c/IVA</th>}
+              <th style={{width:30,borderBottom:"1px solid #eee"}} />
             </tr>
           </thead>
           <tbody>{lineas.map(function(l,idx){
             return <tr key={idx} style={{borderBottom:"1px solid #f5f5f5"}}>
               <td style={{padding:"6px 10px",fontFamily:"monospace",fontSize:11,color:linColor}}>{l.codigo}</td>
               <td style={{padding:"6px 10px",fontWeight:500}}>{l.nombre}</td>
-              <td style={{padding:"6px 10px"}}><Badge color="#7f77dd" label={l.unidad||"ud"} /></td>
+              <td style={{padding:"6px 10px"}}><Badge color="#7f77dd" label={l.unidad_medida||"Unidad"} /></td>
               <td style={{padding:"6px 4px",textAlign:"right"}}>
-                <input type="number" min="0" step="0.001" value={l.cantidad} onChange={function(e){updateLinea(idx,"cantidad",parseFloat(e.target.value)||0);}}
+                <input type="number" min="0" step="0.001" value={l.cantidad}
+                  onChange={function(e){updateLinea(idx,"cantidad",e.target.value);}}
                   style={{width:70,padding:"4px 6px",border:"1px solid #ddd",borderRadius:6,fontSize:12,textAlign:"right"}} />
               </td>
               {form.tipo==="proforma"&&<td style={{padding:"6px 4px",textAlign:"right"}}>
-                <input type="number" min="0" step="0.01" value={l.precio} onChange={function(e){updateLinea(idx,"precio",parseFloat(e.target.value)||0);}}
+                <input type="number" min="0" step="0.01" value={l.precio}
+                  onChange={function(e){updateLinea(idx,"precio",e.target.value);}}
                   style={{width:80,padding:"4px 6px",border:"1px solid #ddd",borderRadius:6,fontSize:12,textAlign:"right"}} />
               </td>}
-              {form.tipo==="proforma"&&<td style={{padding:"6px 10px",textAlign:"right",fontWeight:600,color:"#1d9e75"}}>€{(l.subtotal||0).toFixed(2)}</td>}
+              {form.tipo==="proforma"&&<td style={{padding:"6px 4px",textAlign:"right"}}>
+                <select value={l.iva} onChange={function(e){updateLinea(idx,"iva",e.target.value);}}
+                  style={{padding:"4px 6px",border:"1px solid #ddd",borderRadius:6,fontSize:11,background:"#fff"}}>
+                  {IVA_TIPOS.map(function(i){return <option key={i.value} value={i.value}>{i.label}</option>;})}
+                </select>
+              </td>}
+              {form.tipo==="proforma"&&<td style={{padding:"6px 10px",textAlign:"right",fontWeight:600}}>€{(l.subtotal||0).toFixed(2)}</td>}
+              {form.tipo==="proforma"&&<td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:"#1d9e75"}}>€{(l.total_linea||0).toFixed(2)}</td>}
               <td style={{padding:"6px 4px",textAlign:"center"}}>
                 <button onClick={function(){removeLinea(idx);}} style={{background:"none",border:"none",cursor:"pointer",color:"#e24b4a",fontSize:16}}>×</button>
               </td>
@@ -1297,11 +1420,20 @@ function PedidoEditor(props) {
           })}</tbody>
         </table>
       </div>
+
       {form.tipo==="proforma"&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
-        <div style={{background:"#f9f9f9",borderRadius:10,padding:"12px 20px",fontSize:13,minWidth:220,border:"1px solid #eee"}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#888"}}>Base imponible:</span><span style={{fontWeight:600}}>€{subtotal.toFixed(2)}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#888"}}>IVA ({form.iva}%):</span><span style={{fontWeight:600}}>€{totalIva.toFixed(2)}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",borderTop:"1px solid #ddd",paddingTop:6,marginTop:4}}><span style={{fontWeight:700}}>TOTAL:</span><span style={{fontWeight:700,color:linColor,fontSize:16}}>€{total.toFixed(2)}</span></div>
+        <div style={{background:"#f9f9f9",borderRadius:10,padding:"14px 20px",fontSize:13,minWidth:260,border:"1px solid #eee"}}>
+          <div style={{fontWeight:600,color:"#888",fontSize:11,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Resumen fiscal</div>
+          {Object.keys(gruposIva).map(function(iva){
+            var g=gruposIva[iva];
+            return <div key={iva}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12}}><span style={{color:"#888"}}>Base {iva}%:</span><span>€{g.base.toFixed(2)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12}}><span style={{color:"#888"}}>IVA {iva}%:</span><span>€{g.iva.toFixed(2)}</span></div>
+            </div>;
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,borderTop:"1px solid #ddd",paddingTop:6,marginTop:4}}><span style={{color:"#888"}}>Total base:</span><span style={{fontWeight:600}}>€{subtotalBase.toFixed(2)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#888"}}>Total IVA:</span><span style={{fontWeight:600}}>€{totalIvaSum.toFixed(2)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+linColor,paddingTop:6,marginTop:4}}><span style={{fontWeight:700}}>TOTAL:</span><span style={{fontWeight:700,color:linColor,fontSize:16}}>€{totalFinal.toFixed(2)}</span></div>
         </div>
       </div>}
     </div>}
@@ -1318,6 +1450,167 @@ function generarPDF(pedido,lineas,cliente,currentUser,logoUrl) {
   var info=EMPRESA_INFO[pedido.linea_negocio]||EMPRESA_INFO["La Sin Gluten"];
   var esProforma=pedido.tipo==="proforma";
   var titulo=esProforma?"PROFORMA":"PEDIDO";
+  var linColor=LINEA_COLOR[pedido.linea_negocio]||"#5bb5bc";
+
+  // Dirección completa del cliente
+  var dirCli="";
+  if(cliente){
+    if(cliente.calle)dirCli+=cliente.calle;
+    if(cliente.numero)dirCli+=(dirCli?" ":"")+cliente.numero;
+    if(cliente.cp||cliente.ciudad)dirCli+=(dirCli?", ":"")+[cliente.cp,cliente.ciudad].filter(Boolean).join(" ");
+    if(cliente.provincia)dirCli+=(dirCli?", ":"")+cliente.provincia;
+    if(cliente.pais)dirCli+=(dirCli?", ":"")+cliente.pais;
+  }
+
+  // Agrupar IVA para proforma
+  var gruposIva={};
+  if(esProforma){
+    lineas.forEach(function(l){
+      var k=l.iva_linea||l.iva||21;
+      if(!gruposIva[k])gruposIva[k]={base:0,iva_imp:0};
+      gruposIva[k].base+=parseFloat(l.subtotal||0);
+      gruposIva[k].iva_imp+=parseFloat(l.iva_importe||0);
+    });
+  }
+  var totalBase=lineas.reduce(function(s,l){return s+parseFloat(l.subtotal||0);},0);
+  var totalIvaSum=Object.values(gruposIva).reduce(function(s,g){return s+g.iva_imp;},0);
+  var totalFinal=totalBase+totalIvaSum;
+
+  var html=`<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#222;background:#fff;padding:28px;}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid `+linColor+`;}
+  .logo{width:80px;height:80px;object-fit:contain;}
+  .empresa{flex:1;margin-left:14px;}
+  .empresa h2{font-size:14px;color:`+linColor+`;margin-bottom:4px;font-weight:700;}
+  .empresa p{font-size:10px;color:#555;line-height:1.6;}
+  .doc-title{text-align:right;min-width:160px;}
+  .doc-title h1{font-size:26px;font-weight:900;color:`+linColor+`;letter-spacing:2px;}
+  .doc-title .num{font-size:14px;font-weight:700;color:#333;margin-top:4px;}
+  .doc-title p{font-size:10px;color:#666;margin-top:3px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+  .box{background:#f8f8f8;border-radius:6px;padding:10px 14px;border:1px solid #eee;}
+  .box h3{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:5px;font-weight:700;}
+  .box p,.box div{font-size:11px;line-height:1.7;color:#333;}
+  .box strong{font-weight:700;}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11px;}
+  thead tr{background:`+linColor+`;color:#fff;}
+  th{padding:8px 9px;text-align:left;font-size:10px;font-weight:700;}
+  th.r{text-align:right;}
+  td{padding:7px 9px;border-bottom:1px solid #f0f0f0;}
+  td.r{text-align:right;}
+  td.mono{font-family:monospace;font-size:10px;color:`+linColor+`;font-weight:600;}
+  tr:nth-child(even) td{background:#fafafa;}
+  .totales{display:flex;justify-content:flex-end;margin-top:6px;}
+  .totales-box{width:240px;border:1px solid #eee;border-radius:8px;padding:12px 16px;background:#fafafa;}
+  .t-row{display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px;}
+  .t-row.sep{border-top:1px solid #ddd;padding-top:5px;margin-top:4px;}
+  .t-row.total{font-size:14px;font-weight:700;border-top:2px solid `+linColor+`;padding-top:6px;margin-top:5px;color:`+linColor+`;}
+  .entrega{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:9px 13px;margin-bottom:12px;}
+  .entrega h3{font-size:9px;text-transform:uppercase;color:#1d9e75;margin-bottom:3px;font-weight:700;}
+  .obs{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:10px;color:#555;}
+  .footer{margin-top:20px;padding-top:10px;border-top:1px solid #eee;font-size:9px;color:#aaa;text-align:center;}
+  .badge{display:inline-block;padding:1px 8px;border-radius:8px;font-size:10px;font-weight:600;}
+  .no-precio{background:`+linColor+`15;color:`+linColor+`;padding:2px 10px;border-radius:8px;font-size:10px;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="header">
+  <div style="display:flex;align-items:center;">
+    <img class="logo" src="`+logoUrl+`" alt="Logo" />
+    <div class="empresa">
+      <h2>`+info.razon+`</h2>
+      <p>NIF: `+info.nif+`<br/>`+info.direccion+`<br/>Tel: `+info.telefono+`</p>
+    </div>
+  </div>
+  <div class="doc-title">
+    <h1>`+titulo+`</h1>
+    <div class="num">`+pedido.numero+`</div>
+    <p>Fecha: <strong>`+pedido.fecha+`</strong></p>
+    `+(pedido.fecha_entrega?`<p>Entrega: <strong>`+pedido.fecha_entrega+`</strong></p>`:"")+`
+    <p style="margin-top:3px;color:#888;">Gestor: `+pedido.gestor+`</p>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="box">
+    <h3>Cliente</h3>
+    <div><strong>`+(cliente?cliente.nombre:"—")+`</strong></div>
+    `+(cliente&&cliente.codigo?`<div style="color:#888;font-size:10px;">Cód: `+cliente.codigo+`</div>`:"")+`
+    `+(dirCli?`<div>`+dirCli+`</div>`:"")+`
+    `+(cliente&&cliente.telefono?`<div>📞 `+cliente.telefono+`</div>`:"")+`
+    `+(cliente&&cliente.movil?`<div>📱 `+cliente.movil+`</div>`:"")+`
+    `+(cliente&&cliente.email?`<div>✉️ `+cliente.email+`</div>`:"")+`
+    `+(cliente&&cliente.nif?`<div>NIF/CIF: `+cliente.nif+`</div>`:"")+`
+    `+(cliente&&cliente.persona_contacto?`<div>Contacto: `+cliente.persona_contacto+`</div>`:"")+`
+  </div>
+  <div class="box">
+    <h3>Detalles</h3>
+    <div>Número: <strong>`+pedido.numero+`</strong></div>
+    <div>Tipo: <strong>`+(esProforma?"Proforma":"Pedido")+`</strong></div>
+    <div>Línea: <strong>`+pedido.linea_negocio+`</strong></div>
+    <div>Estado: <strong>`+(pedido.estado||"Borrador")+`</strong></div>
+  </div>
+</div>
+
+`+(pedido.direccion_entrega?`<div class="entrega"><h3>📍 Dirección de entrega</h3><div>`+pedido.direccion_entrega+`</div></div>`:"")+`
+`+(pedido.observaciones?`<div class="obs">💬 <strong>Observaciones:</strong> `+pedido.observaciones+`</div>`:"")+`
+
+<table>
+  <thead>
+    <tr>
+      <th>Código</th>
+      <th>Producto</th>
+      <th>Unidad</th>
+      <th class="r">Cantidad</th>
+      `+(esProforma?`<th class="r">Precio unit.</th><th class="r">Base</th><th class="r">IVA%</th><th class="r">Total c/IVA</th>`:``)+`
+    </tr>
+  </thead>
+  <tbody>
+    `+lineas.map(function(l){
+      var iva=l.iva_linea||l.iva||21;
+      return `<tr>
+        <td class="mono">`+(l.codigo||"")+`</td>
+        <td style="font-weight:500">`+l.nombre+`</td>
+        <td>`+(l.unidad||"Unidad")+`</td>
+        <td class="r"><strong>`+l.cantidad+`</strong></td>
+        `+(esProforma
+          ?`<td class="r">€`+parseFloat(l.precio||0).toFixed(2)+`</td>`
+           +`<td class="r">€`+parseFloat(l.subtotal||0).toFixed(2)+`</td>`
+           +`<td class="r"><span style="color:#ba7517;font-weight:600">`+iva+`%</span></td>`
+           +`<td class="r" style="font-weight:700;color:#1d9e75">€`+parseFloat(l.total_linea||0).toFixed(2)+`</td>`
+          :`<td><span class="no-precio">Pedido</span></td>`)+`
+      </tr>`;
+    }).join("")+`
+  </tbody>
+</table>
+
+`+(esProforma?`<div class="totales">
+  <div class="totales-box">
+    <div style="font-weight:700;font-size:10px;text-transform:uppercase;color:#888;margin-bottom:6px;letter-spacing:0.5px;">Resumen fiscal</div>
+    `+Object.keys(gruposIva).map(function(iva){
+      var g=gruposIva[iva];
+      return `<div class="t-row"><span>Base `+iva+`%:</span><span>€`+g.base.toFixed(2)+`</span></div>`
+            +`<div class="t-row"><span>IVA `+iva+`%:</span><span>€`+g.iva_imp.toFixed(2)+`</span></div>`;
+    }).join("")+`
+    <div class="t-row sep"><span>Total base:</span><span style="font-weight:600">€`+totalBase.toFixed(2)+`</span></div>
+    <div class="t-row"><span>Total IVA:</span><span style="font-weight:600">€`+totalIvaSum.toFixed(2)+`</span></div>
+    <div class="t-row total"><span>TOTAL:</span><span>€`+totalFinal.toFixed(2)+`</span></div>
+  </div>
+</div>`:`<div style="text-align:right;font-size:10px;color:#aaa;margin-top:2px;">* Pedido sin valorizar</div>`)+`
+
+<div class="footer">`+info.razon+` · NIF: `+info.nif+` · Generado el `+new Date().toLocaleDateString("es-ES")+` · `+pedido.numero+`</div>
+</body></html>`;
+
+  var w=window.open("","_blank","width=950,height=750");
+  if(!w){alert("Permite ventanas emergentes para generar el PDF.");return;}
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){w.print();},700);
+}
 
   var dir="";
   if(cliente){
@@ -1517,7 +1810,7 @@ function TabPedidos(props) {
         <Btn onClick={function(){setView("lista");}}>← Volver</Btn>
         <span style={{fontSize:15,fontWeight:600}}>⚙️ Configuración de Productos y Precios</span>
       </div>
-      <ProductosManager linColor={linColor} lineaActiva={lineaActiva} />
+      <ProductosManager linColor={linColor} lineaActiva={lineaActiva} currentUser={currentUser} />
     </div>;
   }
 
@@ -2040,6 +2333,8 @@ function CRM() {
           </div>
         </div>;
       })}
+      <Sep label="📦 Productos y listas de precio" />
+      <ProductosManager linColor={linColor} lineaActiva={lineaActiva} currentUser={currentUser} />
     </div>;
   }
 
