@@ -1,5 +1,3 @@
-Copiar
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -42,17 +40,17 @@ window.onerror = function(msg, src, line, col, err) {
 </script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
- 
+
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
 const HDR = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Prefer": "return=representation" };
 const EJS_SVC = "service_23nxndb", EJS_TPL = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
- 
+
 const LINEAS = ["La Sin Gluten", "Bauer Lemans"];
 const LINEA_COLOR = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
 const LINEA_GRAD  = { "La Sin Gluten": "linear-gradient(135deg,#8ecfd4,#5bb5bc)", "Bauer Lemans": "linear-gradient(135deg,#c0392b,#922b21)" };
 const LINEA_LOGO  = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
- 
+
 const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota","Muestras"];
 const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
@@ -101,16 +99,16 @@ const CY = new Date().getFullYear();
 const CM = new Date().getMonth() + 1;
 const ANIOS = [String(CY-2), String(CY-1), String(CY), String(CY+1), String(CY+2)];
 const POR_PAGINA = 50;
- 
+
 const PRIO_C = { Alta:"#e24b4a", Media:"#ba7517", Baja:"#1d9e75" };
 const EST_C  = { Pendiente:"#378add", "En curso":"#ba7517", Completada:"#1d9e75" };
 const TIPO_C = { Llamada:"#7f77dd", Email:"#378add", Reunión:"#1d9e75", Visita:"#e24b4a", WhatsApp:"#25d366", Nota:"#888780", Muestras:"#f59e0b" };
 const TCLI_C = { Cliente:"#1d9e75", Potencial:"#ba7517", Inactivo:"#888" };
- 
+
 function norm(s) { return (s||"").trim().toLowerCase().replace(/\s+/g," "); }
 function tod()   { return new Date().toISOString().slice(0,10); }
 function ddiff(f){ return Math.ceil((new Date(f)-new Date(tod()))/86400000); }
- 
+
 async function sbGet(t,p) {
   p=p||"";
   var r=await fetch(SB_URL+"/rest/v1/"+t+"?"+p,{headers:HDR});
@@ -135,7 +133,7 @@ async function sbDelWhere(t,p) {
   var r=await fetch(SB_URL+"/rest/v1/"+t+"?"+p,{method:"DELETE",headers:HDR});
   if(!r.ok) throw new Error(await r.text());
 }
- 
+
 function toCSV(rows,cols) {
   var h=cols.map(function(c){return c.label;}).join(",");
   var b=rows.map(function(r){return cols.map(function(c){return '"'+String(r[c.key]||"").replace(/"/g,'""')+'"';}).join(",");}).join("\n");
@@ -153,7 +151,7 @@ function dlXLSX(data,sheetName,filename) {
   XLSX.utils.book_append_sheet(wb,ws,sheetName);
   XLSX.writeFile(wb,filename);
 }
- 
+
 async function sendEmail(gestor,email,momento,resumen) {
   try { await emailjs.send(EJS_SVC,EJS_TPL,{gestor:gestor,email:email,momento:momento,fecha:new Date().toLocaleDateString("es-ES"),resumen:resumen},EJS_KEY); return true; }
   catch(e) { return false; }
@@ -170,7 +168,7 @@ function buildResumen(gestor,activities,clientName) {
   if(!txt) txt="✅ ¡Todo al día!\n";
   return txt;
 }
- 
+
 // ── UI ────────────────────────────────────────────────────────────────────────
 function Badge(props) {
   return <span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:props.color+"22",color:props.color,fontWeight:500,whiteSpace:"nowrap"}}>{props.label}</span>;
@@ -205,7 +203,7 @@ function FRow(props){return <div style={{display:"flex",gap:10,marginBottom:10}}
 function Card(props){return <div style={Object.assign({background:"#fff",border:"1px solid #e8e8e8",borderRadius:12,padding:"1.25rem",marginBottom:20},props.style||{})}>{props.children}</div>;}
 function Spinner(){return <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"4rem",color:"#888",fontSize:13,gap:10}}><div style={{width:20,height:20,border:"2px solid #ddd",borderTopColor:"#185fa5",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />Conectando…</div>;}
 function ErrMsg(props){return <div style={{padding:"1rem",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,color:"#b91c1c",fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>⚠️ {props.msg}</span>{props.onRetry&&<Btn onClick={props.onRetry}>Reintentar</Btn>}</div>;}
- 
+
 // ── PAGINACIÓN ────────────────────────────────────────────────────────────────
 function Paginacion(props) {
   var total=props.total, pagina=props.pagina, onChange=props.onChange;
@@ -225,7 +223,7 @@ function Paginacion(props) {
     <span style={{fontSize:12,color:"#888",marginLeft:8}}>{total} clientes · pág. {pagina}/{totalPags}</span>
   </div>;
 }
- 
+
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function Login(props) {
   var [gestor,setGestor]=useState("");
@@ -272,7 +270,7 @@ function Login(props) {
     </div>
   );
 }
- 
+
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 function AdminPanel() {
   var [usuarios,setUsuarios]=useState([]);
@@ -335,7 +333,7 @@ function AdminPanel() {
     </div>
   );
 }
- 
+
 // ── NOTIF CONFIG ──────────────────────────────────────────────────────────────
 function NotifConfig(props) {
   var activities=props.activities,clients=props.clients,currentUser=props.currentUser;
@@ -416,7 +414,7 @@ function NotifConfig(props) {
     </div>
   );
 }
- 
+
 // ── NOTIF BANNER — FIX: muestra nombre cliente + hasta 5 items ────────────────
 function NotifBanner(props) {
   var activities=props.activities,clients=props.clients,filterGestor=props.filterGestor;
@@ -452,7 +450,7 @@ function NotifBanner(props) {
     </div>
   );
 }
- 
+
 // ── FORM: Contactos múltiples ─────────────────────────────────────────────────
 function ContactosEditor(props) {
   var contactos=props.contactos, onChange=props.onChange;
@@ -499,7 +497,7 @@ function ContactosEditor(props) {
     </div>
   );
 }
- 
+
 // ── FORM: Cliente ─────────────────────────────────────────────────────────────
 function ClienteForm(props) {
   var config=props.config,clients=props.clients,onSave=props.onSave,onCancel=props.onCancel,saving=props.saving,currentUser=props.currentUser,lineaActiva=props.lineaActiva;
@@ -561,7 +559,7 @@ function ClienteForm(props) {
     </Card>
   );
 }
- 
+
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
 function ActividadForm(props) {
   var config=props.config,clients=props.clients,onSave=props.onSave,onCancel=props.onCancel,saving=props.saving,currentUser=props.currentUser,lineaActiva=props.lineaActiva;
@@ -606,7 +604,7 @@ function ActividadForm(props) {
     </Card>
   );
 }
- 
+
 // ── DETALLE CLIENTE ───────────────────────────────────────────────────────────
 function DetalleCliente(props) {
   var cliente=props.cliente,activities=props.activities,onClose=props.onClose;
@@ -697,7 +695,7 @@ function DetalleCliente(props) {
     </Card>
   );
 }
- 
+
 // ── IMPORT CLIENTES ───────────────────────────────────────────────────────────
 function ImportExcel(props) {
   var config=props.config,clients=props.clients,onImport=props.onImport,onClose=props.onClose,lineaActiva=props.lineaActiva;
@@ -812,7 +810,7 @@ function ImportExcel(props) {
     </Card>
   );
 }
- 
+
 // ── IMPORT VENTAS ─────────────────────────────────────────────────────────────
 function ImportVentas(props) {
   var clients=props.clients,onImport=props.onImport,onClose=props.onClose;
@@ -909,7 +907,7 @@ function ImportVentas(props) {
     </Card>
   );
 }
- 
+
 // ── GRÁFICO ───────────────────────────────────────────────────────────────────
 function VentasChart(props) {
   var data=props.data||[];
@@ -925,16 +923,16 @@ function VentasChart(props) {
   if(!data.length)return <div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>Sin datos.</div>;
   return <div style={{height:280,position:"relative"}}><canvas ref={canvasRef} /></div>;
 }
- 
+
 // ── PEDIDOS / PROFORMAS ───────────────────────────────────────────────────────
- 
+
 function usePedidosData(lineaActiva) {
   var [pedidos,setPedidos]=useState([]);
   var [productos,setProductos]=useState([]);
   var [listas,setListas]=useState([]);
   var [precios,setPrecios]=useState([]);
   var [loading,setLoading]=useState(false);
- 
+
   var reload=useCallback(function(){
     setLoading(true);
     Promise.all([
@@ -946,11 +944,11 @@ function usePedidosData(lineaActiva) {
       setPedidos(r[0]);setProductos(r[1]);setListas(r[2]);setPrecios(r[3]);setLoading(false);
     }).catch(function(){setLoading(false);});
   },[lineaActiva]);
- 
+
   useEffect(function(){reload();},[reload]);
   return {pedidos,productos,listas,precios,loading,reload};
 }
- 
+
 // ── Gestión de Productos y Listas (dentro de Configuración o Pedidos) ─────────
 function ProductosManager(props) {
   var {linColor,lineaActiva,currentUser}=props;
@@ -961,15 +959,15 @@ function ProductosManager(props) {
   var [editProd,setEditProd]=useState(null);
   var [editLista,setEditLista]=useState(null);
   var [saving,setSaving]=useState(false);
- 
+
   // Líneas visibles según usuario
   var lineasVisibles=currentUser&&currentUser.lineas?currentUser.lineas:LINEAS;
   var [lineaFiltro,setLineaFiltro]=useState(lineaActiva);
- 
+
   var emptyProd={codigo:"",nombre:"",descripcion:"",unidad_medida:"Unidad",linea_negocio:lineaActiva,activo:true,
     presentacion:"",sacos_por_pallet:"",unidades_por_caja:"",unidades_por_pallet:"",caducidad_meses:"",iva_producto:21};
   var emptyLista={nombre:"",linea_negocio:lineaActiva,activo:true};
- 
+
   function reload(){
     Promise.all([
       sbGet("productos","order=nombre.asc"),
@@ -978,7 +976,7 @@ function ProductosManager(props) {
     ]).then(function(r){setProductos(r[0]);setListas(r[1]);setPrecios(r[2]);});
   }
   useEffect(function(){reload();},[]);
- 
+
   function saveProd(f){
     setSaving(true);
     var body={
@@ -1010,10 +1008,10 @@ function ProductosManager(props) {
     else{sbPost("precios",{producto_id:productoId,lista_id:listaId,precio:num}).then(reload);}
   }
   function getPrecio(prodId,listaId){var p=precios.find(function(x){return x.producto_id===prodId&&x.lista_id===listaId;});return p?p.precio:"";}
- 
+
   var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaFiltro;});
   var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaFiltro;});
- 
+
   // Selector de línea visible cuando el usuario tiene acceso a ambas
   function LineaSelector(){
     if(lineasVisibles.length<=1)return null;
@@ -1028,7 +1026,7 @@ function ProductosManager(props) {
       })}
     </div>;
   }
- 
+
   return <div>
     <LineaSelector />
     <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"1px solid #eee"}}>
@@ -1039,7 +1037,7 @@ function ProductosManager(props) {
         </button>;
       })}
     </div>
- 
+
     {tab==="productos"&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <span style={{fontSize:13,color:"#555"}}>Productos de <strong>{lineaFiltro}</strong> ({prodFilt.length})</span>
@@ -1116,7 +1114,7 @@ function ProductosManager(props) {
       </div>
       {!prodFilt.length&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>No hay productos para <strong>{lineaFiltro}</strong>. Crea el primero.</div>}
     </div>}
- 
+
     {tab==="listas"&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <span style={{fontSize:13,color:"#555"}}>Listas de <strong>{lineaFiltro}</strong> ({listasFilt.length})</span>
@@ -1155,7 +1153,7 @@ function ProductosManager(props) {
         {!listasFilt.length&&<div style={{color:"#aaa",fontSize:13}}>No hay listas de precio para <strong>{lineaFiltro}</strong>.</div>}
       </div>
     </div>}
- 
+
     {tab==="tabla"&&<div>
       <div style={{fontSize:13,color:"#555",marginBottom:12}}>Precios por producto y lista — <strong>{lineaFiltro}</strong></div>
       {(!prodFilt.length||!listasFilt.length)
@@ -1191,7 +1189,7 @@ function ProductosManager(props) {
     </div>}
   </div>;
 }
- 
+
 // ── Editor de pedido/proforma/presupuesto ────────────────────────────────────
 function PedidoEditor(props) {
   var {clients,lineaActiva,linColor,currentUser,onSaved,onCancel,initial,config}=props;
@@ -1202,11 +1200,11 @@ function PedidoEditor(props) {
   var [busqCli,setBusqCli]=useState("");
   var [showDropdown,setShowDropdown]=useState(false);
   var [busqProd,setBusqProd]=useState("");
- 
+
   var initForm={tipo:"pedido",cliente_id:"",lista_id:"",fecha:tod(),fecha_entrega:"",direccion_entrega:"",observaciones:"",gestor:currentUser.nombre,linea_negocio:lineaActiva};
   var [form,setForm]=useState(initial?Object.assign({},initForm,initial):initForm);
   var [lineas,setLineas]=useState(initial&&initial._lineas?initial._lineas:[]);
- 
+
   useEffect(function(){
     Promise.all([
       sbGet("productos","activo=eq.true&linea_negocio=eq."+encodeURIComponent(lineaActiva)+"&order=nombre.asc"),
@@ -1214,22 +1212,22 @@ function PedidoEditor(props) {
       sbGet("precios","select=*"),
     ]).then(function(r){setProductos(r[0]);setListas(r[1]);setPrecios(r[2]);});
   },[lineaActiva]);
- 
+
   useEffect(function(){
     if(initial&&initial.cliente_id){
       var c=clients.find(function(x){return x.id===parseInt(initial.cliente_id);});
       if(c)setBusqCli(c.nombre);
     }
   },[]);
- 
+
   function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
- 
+
   function getPrecioLista(prodId,listaId){
     if(!listaId)return 0;
     var p=precios.find(function(x){return x.producto_id===prodId&&x.lista_id===parseInt(listaId);});
     return p?p.precio:0;
   }
- 
+
   function addLinea(prod){
     if(lineas.find(function(l){return l.producto_id===prod.id;}))return;
     var precio=getPrecioLista(prod.id,form.lista_id);
@@ -1244,7 +1242,7 @@ function PedidoEditor(props) {
       subtotal:precio,iva_importe:precio*iva/100,total_linea:precio*(1+iva/100)
     }]);});
   }
- 
+
   function updateLinea(idx,k,v){
     setLineas(function(prev){
       return prev.map(function(l,i){
@@ -1257,9 +1255,9 @@ function PedidoEditor(props) {
       });
     });
   }
- 
+
   function removeLinea(idx){setLineas(function(prev){return prev.filter(function(_,i){return i!==idx;});});}
- 
+
   function handleListaChange(listaId){
     set("lista_id",listaId);
     setLineas(function(prev){return prev.map(function(l){
@@ -1270,7 +1268,7 @@ function PedidoEditor(props) {
       return Object.assign({},l,{precio:precio,subtotal:subtotal,iva_importe:subtotal*iva/100,total_linea:subtotal*(1+iva/100)});
     });});
   }
- 
+
   var subtotalBase=lineas.reduce(function(s,l){return s+(l.subtotal||0);},0);
   var gruposIva=lineas.reduce(function(acc,l){
     var k=l.iva||21;
@@ -1281,20 +1279,20 @@ function PedidoEditor(props) {
   },{});
   var totalIvaSum=Object.values(gruposIva).reduce(function(s,g){return s+g.iva;},0);
   var totalFinal=subtotalBase+totalIvaSum;
- 
+
   var clientesFilt=useMemo(function(){
     var q=norm(busqCli);
     return clients.filter(function(c){return c.linea_negocio===lineaActiva&&(!q||norm(c.nombre).indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0);});
   },[clients,lineaActiva,busqCli]);
- 
+
   var clienteSel=clients.find(function(c){return c.id===parseInt(form.cliente_id);});
   var listaSel=listas.find(function(l){return l.id===parseInt(form.lista_id);});
- 
+
   var prodsFiltrados=useMemo(function(){
     var q=norm(busqProd);
     return productos.filter(function(p){return !q||norm(p.nombre).indexOf(q)>=0||norm(p.codigo||"").indexOf(q)>=0;});
   },[productos,busqProd]);
- 
+
   function handleSave(){
     if(!form.cliente_id||!lineas.length){alert("Selecciona un cliente y añade al menos un producto.");return;}
     setSaving(true);
@@ -1322,10 +1320,10 @@ function PedidoEditor(props) {
       });
     }).then(function(result){setSaving(false);onSaved(result);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
- 
+
   var gestores=config&&config.gestores?config.gestores:[currentUser.nombre];
   var esPrecio=(form.tipo==="proforma"||form.tipo==="presupuesto");
- 
+
   return <Card>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
       <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
@@ -1343,7 +1341,7 @@ function PedidoEditor(props) {
       </div>
       <button onClick={onCancel} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>x</button>
     </div>
- 
+
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
       <div>
         <div style={{fontSize:12,color:"#666",marginBottom:4}}>Cliente *</div>
@@ -1383,7 +1381,7 @@ function PedidoEditor(props) {
           {clienteSel.nif&&<div>NIF: {clienteSel.nif}</div>}
         </div>}
       </div>
- 
+
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <FRow>
           <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={function(v){set("fecha",v);}} /></FL>
@@ -1404,7 +1402,7 @@ function PedidoEditor(props) {
         </FL>
       </div>
     </div>
- 
+
     <FRow>
       <FL label="Direccion de entrega">
         <Textarea value={form.direccion_entrega||""} onChange={function(v){set("direccion_entrega",v);}} placeholder="Direccion de entrega" rows={2} />
@@ -1415,7 +1413,7 @@ function PedidoEditor(props) {
         <Textarea value={form.observaciones||""} onChange={function(v){set("observaciones",v);}} placeholder="Observaciones" rows={2} />
       </FL>
     </FRow>
- 
+
     <Sep label="Anadir productos" />
     <div style={{marginBottom:10}}>
       <input value={busqProd} onChange={function(e){setBusqProd(e.target.value);}}
@@ -1446,7 +1444,7 @@ function PedidoEditor(props) {
         }
       </div>
     </div>
- 
+
     {lineas.length>0&&<div>
       <Sep label={"Lineas del documento ("+lineas.length+")"} />
       <div style={{overflowX:"auto"}}>
@@ -1494,7 +1492,7 @@ function PedidoEditor(props) {
           })}</tbody>
         </table>
       </div>
- 
+
       {esPrecio&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
         <div style={{background:"#f9f9f9",borderRadius:10,padding:"14px 20px",fontSize:13,minWidth:260,border:"1px solid #eee"}}>
           <div style={{fontWeight:600,color:"#888",fontSize:11,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Resumen fiscal</div>
@@ -1511,15 +1509,15 @@ function PedidoEditor(props) {
         </div>
       </div>}
     </div>}
- 
+
     <div style={{display:"flex",gap:8,marginTop:16}}>
       <Btn variant="primary" onClick={handleSave} disabled={saving||!form.cliente_id||!lineas.length}>{saving?"Guardando...":"Guardar "+form.tipo}</Btn>
       <Btn onClick={onCancel}>Cancelar</Btn>
     </div>
   </Card>;
 }
- 
- 
+
+
 // ── Generador de PDF ──────────────────────────────────────────────────────────
 function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
   var lang = idioma || "es";
@@ -1530,7 +1528,7 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
   var esPedido = pedido.tipo === "pedido";
   var titulo = tr[pedido.tipo] || pedido.tipo.toUpperCase();
   var linColor = LINEA_COLOR[pedido.linea_negocio] || "#5bb5bc";
- 
+
   var dirCli = "";
   if (cliente) {
     if (cliente.calle) dirCli += cliente.calle;
@@ -1539,7 +1537,7 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
     if (cliente.provincia) dirCli += (dirCli ? ", " : "") + cliente.provincia;
     if (cliente.pais) dirCli += (dirCli ? ", " : "") + cliente.pais;
   }
- 
+
   var gruposIva = {};
   if (esProforma) {
     lineas.forEach(function (l) {
@@ -1552,10 +1550,10 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
   var totalBase = lineas.reduce(function (s, l) { return s + parseFloat(l.subtotal || 0); }, 0);
   var totalIvaSum = Object.values(gruposIva).reduce(function (s, g) { return s + g.iva_imp; }, 0);
   var totalFinal = totalBase + totalIvaSum;
- 
+
   var theadHTML = "";
   var tbodyHTML = "";
- 
+
   if (esPresupuesto) {
     theadHTML = "<tr><th>" + tr.codigo + "</th><th>" + tr.producto + "</th><th>" + tr.presentacion + "</th><th class=r>" + tr.uds_caja + "</th><th class=r>" + tr.uds_pallet + "</th><th class=r>" + tr.iva_pct + "</th><th class=r>" + tr.precio + "</th></tr>";
     tbodyHTML = lineas.map(function (l) {
@@ -1574,7 +1572,7 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
       return "<tr><td class=mono>" + (l.codigo||"") + "</td><td style='font-weight:500'>" + l.nombre + "</td><td>" + (l.unidad||"Unidad") + "</td><td class=r><b>" + l.cantidad + "</b></td></tr>";
     }).join("");
   }
- 
+
   var totalesHTML = "";
   if (esProforma) {
     var ivaRows = Object.keys(gruposIva).map(function (iva) {
@@ -1585,12 +1583,12 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
   } else if (esPedido) {
     totalesHTML = "<p style='text-align:right;font-size:10px;color:#aaa;margin-top:4px'>* " + tr.sin_valorizar + "</p>";
   }
- 
+
   var condicionesHTML = "";
   if (esPresupuesto && pedido._condiciones_lista) {
     condicionesHTML = "<div class=cond><h3>" + tr.condiciones + "</h3><p>" + pedido._condiciones_lista + "</p></div>";
   }
- 
+
   var css = "body{font-family:Arial,sans-serif;font-size:12px;color:#222;padding:28px;}"
     + ".hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid " + linColor + ";}"
     + ".logo{width:80px;height:80px;object-fit:contain;}"
@@ -1624,7 +1622,7 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
     + ".cond{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;margin-top:14px;font-size:11px;}"
     + ".cond h3{font-size:9px;text-transform:uppercase;color:#1e40af;margin-bottom:4px;}"
     + ".footer{margin-top:20px;padding-top:10px;border-top:1px solid #eee;font-size:9px;color:#aaa;text-align:center;}";
- 
+
   var cliBlock = "<div class=box><h3>" + tr.cliente + "</h3>"
     + "<div><b>" + (cliente ? cliente.nombre : "") + "</b></div>"
     + (cliente&&cliente.codigo ? "<div style='color:#888;font-size:10px'>Cod: " + cliente.codigo + "</div>" : "")
@@ -1635,14 +1633,14 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
     + (cliente&&cliente.nif ? "<div>" + tr.nif + ": " + cliente.nif + "</div>" : "")
     + (cliente&&cliente.persona_contacto ? "<div>" + cliente.persona_contacto + "</div>" : "")
     + "</div>";
- 
+
   var detBlock = "<div class=box><h3>" + tr.detalles + "</h3>"
     + "<div>" + tr.tipo + ": <b>" + titulo + "</b></div>"
     + "<div>" + tr.linea + ": <b>" + pedido.linea_negocio + "</b></div>"
     + (esPresupuesto && pedido._lista_nombre ? "<div>" + tr.lista_precio + ": <b>" + pedido._lista_nombre + "</b></div>" : "")
     + "<div>" + tr.estado + ": <b>" + (pedido.estado||"Borrador") + "</b></div>"
     + "</div>";
- 
+
   var html = "<!DOCTYPE html><html lang=" + lang + "><head><meta charset=UTF-8><style>" + css + "</style></head><body>"
     + "<div class=hdr>"
     + "<div style='display:flex;align-items:center'>"
@@ -1662,15 +1660,15 @@ function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
     + condicionesHTML
     + "<div class=footer>" + info.razon + " | " + tr.nif + ": " + info.nif + " | " + tr.generado + " " + new Date().toLocaleDateString(lang==="en"?"en-GB":"es-ES") + " | " + pedido.numero + "</div>"
     + "</body></html>";
- 
+
   var w = window.open("", "_blank", "width=950,height=750");
   if (!w) { alert("Permite ventanas emergentes para generar el PDF."); return; }
   w.document.write(html);
   w.document.close();
   setTimeout(function () { w.print(); }, 700);
 }
- 
- 
+
+
 // ── Modal selector de idioma ──────────────────────────────────────────────────
 function ModalIdioma(props) {
   var { onSelect, onCancel } = props;
@@ -1690,7 +1688,7 @@ function ModalIdioma(props) {
     </div>
   </div>;
 }
- 
+
 // ── Tab Pedidos ────────────────────────────────────────────────────────────────
 function TabPedidos(props) {
   var { clients, config, currentUser, lineaActiva, linColor } = props;
@@ -1700,9 +1698,9 @@ function TabPedidos(props) {
   var [filtroTipo, setFiltroTipo] = useState("");
   var [filtroEstado, setFiltroEstado] = useState("");
   var [modalIdioma, setModalIdioma] = useState(null); // pedido obj waiting for idioma
- 
+
   function handleSaved() { reload(); setView("lista"); }
- 
+
   function handleGenerarPDF(pedido, idioma) {
     sbGet("pedido_lineas", "pedido_id=eq." + pedido.id + "&order=id.asc").then(function (lineas) {
       var cliente = clients.find(function (c) { return c.id === pedido.cliente_id; });
@@ -1716,27 +1714,27 @@ function TabPedidos(props) {
       generarPDF(pedidoConDatos, lineas, cliente, currentUser, logoUrl, idioma);
     }).catch(function (e) { alert("Error cargando líneas: " + e.message); });
   }
- 
+
   function openModalIdioma(pedido) { setModalIdioma(pedido); }
- 
+
   function handleDelete(pedido) {
     if (!confirm("¿Eliminar " + pedido.tipo + " " + pedido.numero + "?")) return;
     sbDel("pedidos", pedido.id).then(function () { reload(); setSelected(null); }).catch(function (e) { alert("Error: " + e.message); });
   }
- 
+
   var pedidosFilt = pedidos.filter(function (p) {
     if (filtroTipo && p.tipo !== filtroTipo) return false;
     if (filtroEstado && p.estado !== filtroEstado) return false;
     return true;
   });
- 
+
   var ESTADOS_PED = ["Borrador", "Confirmado", "En preparación", "Enviado", "Completado", "Cancelado"];
   var ESTADOS_C = { Borrador: "#888", Confirmado: "#185fa5", "En preparación": "#ba7517", Enviado: "#7f77dd", Completado: "#1d9e75", Cancelado: "#e24b4a" };
- 
+
   function handleEstado(pedido, estado) {
     sbPatch("pedidos", pedido.id, { estado: estado }).then(function () { reload(); }).catch(function (e) { alert("Error: " + e.message); });
   }
- 
+
   if (view === "nuevo" || view === "editar") {
     return <PedidoEditor
       clients={clients} lineaActiva={lineaActiva} linColor={linColor}
@@ -1745,7 +1743,7 @@ function TabPedidos(props) {
       onSaved={handleSaved}
       onCancel={function () { setView("lista"); }} />;
   }
- 
+
   if (view === "config") {
     return <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
@@ -1755,10 +1753,10 @@ function TabPedidos(props) {
       <ProductosManager linColor={linColor} lineaActiva={lineaActiva} currentUser={currentUser} />
     </div>;
   }
- 
+
   return <div>
     {modalIdioma && <ModalIdioma onSelect={function (lang) { handleGenerarPDF(modalIdioma, lang); setModalIdioma(null); }} onCancel={function () { setModalIdioma(null); }} />}
- 
+
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
       <Btn variant="primary" onClick={function () { setSelected(null); setView("nuevo"); }}>+ Nuevo documento</Btn>
       <Btn onClick={function () { setView("config"); }}>⚙️ Productos y precios</Btn>
@@ -1779,7 +1777,7 @@ function TabPedidos(props) {
       </div>
       {(filtroTipo || filtroEstado) && <Btn onClick={function () { setFiltroTipo(""); setFiltroEstado(""); }}>Limpiar</Btn>}
     </div>
- 
+
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
       {[
         ["Total documentos", pedidos.length, "#185fa5"],
@@ -1793,7 +1791,7 @@ function TabPedidos(props) {
         </div>;
       })}
     </div>
- 
+
     {loadingP ? <Spinner /> : <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
         <thead style={{ background: "#f9f9f9" }}>
@@ -1837,12 +1835,12 @@ function TabPedidos(props) {
     </div>}
   </div>;
 }
- 
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
   var sesion=null;
   try{var s=sessionStorage.getItem("crm_session");if(s)sesion=JSON.parse(s);}catch(e){}
- 
+
   var [currentUser,setCurrentUser]=useState(sesion);
   var [lineaActiva,setLineaActiva]=useState(sesion?sesion.lineaActiva:"La Sin Gluten");
   var [tab,setTab]=useState("Dashboard");
@@ -1865,13 +1863,13 @@ function CRM() {
   var [dashGestor,setDashGestor]=useState("");
   var [ventasFiltro,setVentasFiltro]=useState({canal:"",gestor:"",grupo:"",mes:"",anio:String(CY),groupBy:"mes"});
   var [newVal,setNewVal]=useState({canal:"",grupo:"",gestor:""});
- 
+
   function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
- 
+
   var clientsFiltLinea=useMemo(function(){return clients.filter(function(c){return c.linea_negocio===lineaActiva;});},[clients,lineaActiva]);
   var activitiesFiltLinea=useMemo(function(){return activities.filter(function(a){return a.linea_negocio===lineaActiva;});},[activities,lineaActiva]);
   var ventasFiltLinea=useMemo(function(){return ventas.filter(function(v){return v.linea_negocio===lineaActiva;});},[ventas,lineaActiva]);
- 
+
   var loadAll=useCallback(function(){
     setLoading(true);setError(null);
     Promise.all([
@@ -1886,7 +1884,7 @@ function CRM() {
       setConfigState(cfg);setClients(cls);setActivities(acts);setVentas(vts);setLoading(false);
     }).catch(function(e){setError("No se pudo conectar. "+e.message);setLoading(false);});
   },[]);
- 
+
   useEffect(function(){if(currentUser)loadAll();},[currentUser]);
   useEffect(function(){
     if(currentUser&&config.gestores.length){
@@ -1897,7 +1895,7 @@ function CRM() {
       }
     }
   },[currentUser,config.gestores.length]);
- 
+
   function handleLogin(u){sessionStorage.setItem("crm_session",JSON.stringify(u));setCurrentUser(u);setLineaActiva(u.lineaActiva);}
   function handleLogout(){sessionStorage.removeItem("crm_session");setCurrentUser(null);}
   function cambiarLinea(l){
@@ -1906,14 +1904,14 @@ function CRM() {
     setCurrentUser(u);sessionStorage.setItem("crm_session",JSON.stringify(u));
     setDetalleId(null);setClientPanel(null);setActPanel(null);setBusqueda("");setPagina(1);
   }
- 
+
   function saveConfig(key,arr){
     return sbGet("config","clave=eq."+key+"&select=id").then(function(rows){
       if(rows.length)return sbPatch("config",rows[0].id,{valor:arr});
       else return sbPost("config",{clave:key,valor:arr});
     }).then(function(){setConfigState(function(prev){return Object.assign({},prev,{[key]:arr});});});
   }
- 
+
   // FIX: saveClient migra actividades si cambia línea de negocio
   function saveClient(form,contactos){
     setSaving(true);
@@ -1956,12 +1954,12 @@ function CRM() {
       });
     }).then(function(){return loadAll();}).then(function(){setClientPanel(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
- 
+
   function deleteClient(id){
     if(!confirm("¿Eliminar este cliente?"))return;
     sbDel("clientes",id).then(function(){return loadAll();}).then(function(){setDetalleId(null);}).catch(function(e){alert("Error: "+e.message);});
   }
- 
+
   function saveActivity(form){
     setSaving(true);
     var body={cliente_id:form.clienteId,tipo:form.tipo,titulo:form.titulo||"",nota:form.nota,fecha:form.fecha,gestor:form.gestor,estado:form.estado||"Pendiente",prioridad:form.prioridad||"Media",linea_negocio:form.linea_negocio||lineaActiva};
@@ -1971,7 +1969,7 @@ function CRM() {
   function deleteActivity(id){
     sbDel("actividades",id).then(function(){setActivities(function(prev){return prev.filter(function(a){return a.id!==id;});});}).catch(function(e){alert("Error: "+e.message);});
   }
- 
+
   var filteredClients=useMemo(function(){
     var q=norm(busqueda);
     return clientsFiltLinea.filter(function(c){
@@ -1983,12 +1981,12 @@ function CRM() {
       return true;
     });
   },[clientsFiltLinea,filter,busqueda]);
- 
+
   useEffect(function(){setPagina(1);},[busqueda,filter,lineaActiva]);
- 
+
   var totalFiltrados=filteredClients.length;
   var clientesPagina=filteredClients.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
- 
+
   var ventasFilt=useMemo(function(){return ventasFiltLinea.filter(function(v){
     var cliente=clients.find(function(c){return c.id===v.cliente_id;});
     if(ventasFiltro.canal&&(!cliente||cliente.canal!==ventasFiltro.canal))return false;
@@ -1998,20 +1996,20 @@ function CRM() {
     if(ventasFiltro.anio&&String(v.anio)!==ventasFiltro.anio)return false;
     return true;
   });},[ventasFiltLinea,ventasFiltro,clients]);
- 
+
   var ventasChart=useMemo(function(){
     if(ventasFiltro.groupBy==="gestor")return ventasFilt.map(function(v){return Object.assign({},v,{label:v.gestor||"Sin gestor"});});
     if(ventasFiltro.groupBy==="canal"){return ventasFilt.map(function(v){var c=clients.find(function(x){return x.id===v.cliente_id;});return Object.assign({},v,{label:c?c.canal:"Sin canal"});});}
     if(ventasFiltro.groupBy==="cliente")return ventasFilt.map(function(v){return Object.assign({},v,{label:clientName(v.cliente_id)});});
     return ventasFilt.map(function(v){return Object.assign({},v,{label:(MESES[(v.mes||1)-1]||"").slice(0,3)+" "+v.anio});});
   },[ventasFilt,ventasFiltro.groupBy]);
- 
+
   if(!currentUser)return <Login onLogin={handleLogin} />;
- 
+
   var linColor=LINEA_COLOR[lineaActiva]||"#5bb5bc";
   var linGrad=LINEA_GRAD[lineaActiva]||LINEA_GRAD["La Sin Gluten"];
   var linLogo=LINEA_LOGO[lineaActiva]||LINEA_LOGO["La Sin Gluten"];
- 
+
   // FIX Dashboard: muestra título + nombre cliente, scroll, sin límite de 5
   function Dashboard(){
     var totalC=clientsFiltLinea.filter(function(c){return c.tipo_cliente==="Cliente"&&(!dashGestor||c.gestor===dashGestor);}).length;
@@ -2061,7 +2059,7 @@ function CRM() {
       </div>
     </div>;
   }
- 
+
   function TabClientes(){
     return <div>
       {showImportCli&&<ImportExcel config={config} clients={clients} onImport={function(){loadAll().then(function(){setShowImportCli(false);});}} onClose={function(){setShowImportCli(false);}} lineaActiva={lineaActiva} />}
@@ -2135,7 +2133,7 @@ function CRM() {
       </div>}
     </div>;
   }
- 
+
   function TabActividades(){
     var actsFilt=activitiesFiltLinea.filter(function(a){return(!actFiltro.gestor||a.gestor===actFiltro.gestor)&&(!actFiltro.estado||a.estado===actFiltro.estado)&&(!actFiltro.tipo||a.tipo===actFiltro.tipo);});
     return <div>
@@ -2167,7 +2165,7 @@ function CRM() {
       {actsFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin actividades.</div>}
     </div>;
   }
- 
+
   function TabVentas(){
     var totalVenta=ventasFilt.reduce(function(s,v){return s+(v.venta_neta||0);},0);
     var totalUds=ventasFilt.reduce(function(s,v){return s+(v.unidades||0);},0);
@@ -2215,7 +2213,7 @@ function CRM() {
       </div>}
     </div>;
   }
- 
+
   function TabInformes(){
     var [rptFilter,setRptFilter]=useState({canal:"",grupo:"",gestor:"",fechaDesde:"",fechaHasta:"",estado:""});
     var fc=clientsFiltLinea.filter(function(c){return(!rptFilter.canal||c.canal===rptFilter.canal)&&(!rptFilter.grupo||c.grupo===rptFilter.grupo)&&(!rptFilter.gestor||c.gestor===rptFilter.gestor);});
@@ -2265,7 +2263,7 @@ function CRM() {
       </div>
     </div>;
   }
- 
+
   function TabConfiguracion(){
     var sections=[["Canales","canal","canales","#7f77dd"],["Grupos gestores","grupo","grupos","#1d9e75"],["Gestores","gestor","gestores","#378add"]];
     return <div>
@@ -2292,7 +2290,7 @@ function CRM() {
       <ProductosManager linColor={linColor} lineaActiva={lineaActiva} currentUser={currentUser} />
     </div>;
   }
- 
+
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",padding:"1rem 1.25rem",borderRadius:12,background:linGrad}}>
@@ -2339,7 +2337,7 @@ function CRM() {
     </div>
   );
 }
- 
+
 ReactDOM.createRoot(document.getElementById("root")).render(<CRM />);
 </script>
 </body>
