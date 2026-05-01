@@ -1,3 +1,5 @@
+Copiar
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -7,12 +9,12 @@
   <title>CRM Panificadora La Sin Gluten</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.4/babel.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; }
@@ -26,45 +28,89 @@
 <div id="root"></div>
 <div id="err-box" style="display:none;padding:2rem;background:#fef2f2;color:#b91c1c;font-family:monospace;font-size:13px;white-space:pre-wrap;border:1px solid #fca5a5;margin:1rem;border-radius:8px;"></div>
 <script>
-window.onerror = function(msg, src, line) {
+window.onerror = function(msg, src, line, col, err) {
+  // Ignore cross-origin CDN errors (src empty or external)
+  if (!src || (!src.includes(location.hostname) && location.protocol === 'https:' && !src.includes('localhost'))) {
+    // Still show if it's a real app error
+  }
   var d = document.getElementById("err-box");
-  d.style.display = "block";
-  d.textContent = "Error linea " + line + ": " + msg + "\nArchivo: " + src;
+  if (d) {
+    d.style.display = "block";
+    d.textContent = "Error linea " + line + ": " + msg + "\nArchivo: " + src + (err ? "\n" + err.stack : "");
+  }
 };
 </script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
-
+ 
 const SB_URL = "https://lbbpnnvwtanurtjqgcqv.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg";
 const HDR = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Prefer": "return=representation" };
 const EJS_SVC = "service_23nxndb", EJS_TPL = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
-
+ 
 const LINEAS = ["La Sin Gluten", "Bauer Lemans"];
 const LINEA_COLOR = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
 const LINEA_GRAD  = { "La Sin Gluten": "linear-gradient(135deg,#8ecfd4,#5bb5bc)", "Bauer Lemans": "linear-gradient(135deg,#c0392b,#922b21)" };
 const LINEA_LOGO  = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
-
-const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota"];
+ 
+const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota","Muestras"];
 const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
 const TIPOS_CLI   = ["Potencial","Cliente","Inactivo"];
-const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Informes","Configuración"];
+const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Pedidos","Informes","Configuración"];
+const IVA_TIPOS      = [{"label":"21%","value":21},{"label":"10%","value":10},{"label":"4%","value":4}];
+const UNIDADES_MEDIDA = ["Unidad","Caja","Saco","Pallet"];
+const DOC_TIPOS = ["pedido","proforma","presupuesto"];
+const DOC_LABELS = {pedido:"📦 Pedido", proforma:"📄 Proforma", presupuesto:"📋 Presupuesto"};
+const DOC_COLORS = {pedido:"#378add", proforma:"#7f77dd", presupuesto:"#1d9e75"};
+const IDIOMAS = [{value:"es",label:"ES Castellano"},{value:"en",label:"EN English"}];
+const T = {
+  es:{
+    pedido:"PEDIDO", proforma:"PROFORMA", presupuesto:"PRESUPUESTO",
+    cliente:"Cliente", fecha:"Fecha", entrega:"Entrega prevista", gestor:"Gestor",
+    codigo:"Código", producto:"Producto", unidad:"Unidad", cantidad:"Cantidad",
+    precio:"Precio unit.", base:"Base", iva_pct:"IVA%", total_iva:"Total c/IVA",
+    presentacion:"Presentación", uds_caja:"Uds/Caja", uds_pallet:"Uds/Pallet",
+    base_imp:"Base imponible", total_iva_r:"Total IVA", total:"TOTAL",
+    sin_valorizar:"Pedido sin valorizar", observaciones:"Observaciones",
+    dir_entrega:"Dirección de entrega", resumen:"Resumen fiscal",
+    lista_precio:"Lista de precio", condiciones:"Condiciones comerciales",
+    nif:"NIF", tel:"Tel", generado:"Documento generado el", estado:"Estado",
+    linea:"Línea", tipo:"Tipo", detalles:"Detalles del documento",
+  },
+  en:{
+    pedido:"ORDER", proforma:"PROFORMA", presupuesto:"QUOTE",
+    cliente:"Customer", fecha:"Date", entrega:"Delivery date", gestor:"Sales rep",
+    codigo:"Code", producto:"Product", unidad:"Unit", cantidad:"Qty",
+    precio:"Unit price", base:"Net", iva_pct:"VAT%", total_iva:"Total incl. VAT",
+    presentacion:"Presentation", uds_caja:"Units/Box", uds_pallet:"Units/Pallet",
+    base_imp:"Net amount", total_iva_r:"Total VAT", total:"TOTAL",
+    sin_valorizar:"Order (no pricing)", observaciones:"Notes",
+    dir_entrega:"Delivery address", resumen:"Tax summary",
+    lista_precio:"Price list", condiciones:"Commercial conditions",
+    nif:"VAT No.", tel:"Tel", generado:"Document generated on", estado:"Status",
+    linea:"Brand", tipo:"Type", detalles:"Document details",
+  }
+};
+const EMPRESA_INFO = {
+  "La Sin Gluten": { razon:"Panificadora La Sin Gluten SL", nif:"B26916890", direccion:"Travessia Industrial 191, 08907, Hospitalet de Llobregat, Barcelona, España", telefono:"931592650" },
+  "Bauer Lemans":  { razon:"Bauer Lemans SL",              nif:"B66336264", direccion:"Travessia Industrial 191, 08907, Hospitalet de Llobregat, Barcelona, España", telefono:"931592650" }
+};
 const MESES       = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const CY = new Date().getFullYear();
 const CM = new Date().getMonth() + 1;
 const ANIOS = [String(CY-2), String(CY-1), String(CY), String(CY+1), String(CY+2)];
 const POR_PAGINA = 50;
-
+ 
 const PRIO_C = { Alta:"#e24b4a", Media:"#ba7517", Baja:"#1d9e75" };
 const EST_C  = { Pendiente:"#378add", "En curso":"#ba7517", Completada:"#1d9e75" };
-const TIPO_C = { Llamada:"#7f77dd", Email:"#378add", Reunión:"#1d9e75", Visita:"#e24b4a", WhatsApp:"#25d366", Nota:"#888780" };
+const TIPO_C = { Llamada:"#7f77dd", Email:"#378add", Reunión:"#1d9e75", Visita:"#e24b4a", WhatsApp:"#25d366", Nota:"#888780", Muestras:"#f59e0b" };
 const TCLI_C = { Cliente:"#1d9e75", Potencial:"#ba7517", Inactivo:"#888" };
-
+ 
 function norm(s) { return (s||"").trim().toLowerCase().replace(/\s+/g," "); }
 function tod()   { return new Date().toISOString().slice(0,10); }
 function ddiff(f){ return Math.ceil((new Date(f)-new Date(tod()))/86400000); }
-
+ 
 async function sbGet(t,p) {
   p=p||"";
   var r=await fetch(SB_URL+"/rest/v1/"+t+"?"+p,{headers:HDR});
@@ -89,7 +135,7 @@ async function sbDelWhere(t,p) {
   var r=await fetch(SB_URL+"/rest/v1/"+t+"?"+p,{method:"DELETE",headers:HDR});
   if(!r.ok) throw new Error(await r.text());
 }
-
+ 
 function toCSV(rows,cols) {
   var h=cols.map(function(c){return c.label;}).join(",");
   var b=rows.map(function(r){return cols.map(function(c){return '"'+String(r[c.key]||"").replace(/"/g,'""')+'"';}).join(",");}).join("\n");
@@ -107,7 +153,7 @@ function dlXLSX(data,sheetName,filename) {
   XLSX.utils.book_append_sheet(wb,ws,sheetName);
   XLSX.writeFile(wb,filename);
 }
-
+ 
 async function sendEmail(gestor,email,momento,resumen) {
   try { await emailjs.send(EJS_SVC,EJS_TPL,{gestor:gestor,email:email,momento:momento,fecha:new Date().toLocaleDateString("es-ES"),resumen:resumen},EJS_KEY); return true; }
   catch(e) { return false; }
@@ -124,7 +170,7 @@ function buildResumen(gestor,activities,clientName) {
   if(!txt) txt="✅ ¡Todo al día!\n";
   return txt;
 }
-
+ 
 // ── UI ────────────────────────────────────────────────────────────────────────
 function Badge(props) {
   return <span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:props.color+"22",color:props.color,fontWeight:500,whiteSpace:"nowrap"}}>{props.label}</span>;
@@ -159,7 +205,7 @@ function FRow(props){return <div style={{display:"flex",gap:10,marginBottom:10}}
 function Card(props){return <div style={Object.assign({background:"#fff",border:"1px solid #e8e8e8",borderRadius:12,padding:"1.25rem",marginBottom:20},props.style||{})}>{props.children}</div>;}
 function Spinner(){return <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"4rem",color:"#888",fontSize:13,gap:10}}><div style={{width:20,height:20,border:"2px solid #ddd",borderTopColor:"#185fa5",borderRadius:"50%",animation:"spin 0.8s linear infinite"}} />Conectando…</div>;}
 function ErrMsg(props){return <div style={{padding:"1rem",background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,color:"#b91c1c",fontSize:13,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>⚠️ {props.msg}</span>{props.onRetry&&<Btn onClick={props.onRetry}>Reintentar</Btn>}</div>;}
-
+ 
 // ── PAGINACIÓN ────────────────────────────────────────────────────────────────
 function Paginacion(props) {
   var total=props.total, pagina=props.pagina, onChange=props.onChange;
@@ -179,7 +225,7 @@ function Paginacion(props) {
     <span style={{fontSize:12,color:"#888",marginLeft:8}}>{total} clientes · pág. {pagina}/{totalPags}</span>
   </div>;
 }
-
+ 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function Login(props) {
   var [gestor,setGestor]=useState("");
@@ -226,7 +272,7 @@ function Login(props) {
     </div>
   );
 }
-
+ 
 // ── ADMIN ─────────────────────────────────────────────────────────────────────
 function AdminPanel() {
   var [usuarios,setUsuarios]=useState([]);
@@ -289,7 +335,7 @@ function AdminPanel() {
     </div>
   );
 }
-
+ 
 // ── NOTIF CONFIG ──────────────────────────────────────────────────────────────
 function NotifConfig(props) {
   var activities=props.activities,clients=props.clients,currentUser=props.currentUser;
@@ -370,7 +416,7 @@ function NotifConfig(props) {
     </div>
   );
 }
-
+ 
 // ── NOTIF BANNER — FIX: muestra nombre cliente + hasta 5 items ────────────────
 function NotifBanner(props) {
   var activities=props.activities,clients=props.clients,filterGestor=props.filterGestor;
@@ -406,7 +452,7 @@ function NotifBanner(props) {
     </div>
   );
 }
-
+ 
 // ── FORM: Contactos múltiples ─────────────────────────────────────────────────
 function ContactosEditor(props) {
   var contactos=props.contactos, onChange=props.onChange;
@@ -453,7 +499,7 @@ function ContactosEditor(props) {
     </div>
   );
 }
-
+ 
 // ── FORM: Cliente ─────────────────────────────────────────────────────────────
 function ClienteForm(props) {
   var config=props.config,clients=props.clients,onSave=props.onSave,onCancel=props.onCancel,saving=props.saving,currentUser=props.currentUser,lineaActiva=props.lineaActiva;
@@ -515,7 +561,7 @@ function ClienteForm(props) {
     </Card>
   );
 }
-
+ 
 // ── FORM: Actividad ───────────────────────────────────────────────────────────
 function ActividadForm(props) {
   var config=props.config,clients=props.clients,onSave=props.onSave,onCancel=props.onCancel,saving=props.saving,currentUser=props.currentUser,lineaActiva=props.lineaActiva;
@@ -560,14 +606,16 @@ function ActividadForm(props) {
     </Card>
   );
 }
-
+ 
 // ── DETALLE CLIENTE ───────────────────────────────────────────────────────────
 function DetalleCliente(props) {
   var cliente=props.cliente,activities=props.activities,onClose=props.onClose;
   var [contactos,setContactos]=useState([]);
+  var [pdfHistorial,setPdfHistorial]=useState([]);
   useEffect(function(){
     if(cliente&&cliente.id){
       sbGet("contactos","cliente_id=eq."+cliente.id+"&order=id.asc").then(function(rows){setContactos(rows);}).catch(function(){});
+      sbGet("pdf_log","cliente_id=eq."+cliente.id+"&order=created_at.desc").then(function(rows){setPdfHistorial(rows);}).catch(function(){});
     }
   },[cliente&&cliente.id]);
   var cActs=activities.filter(function(a){return a.cliente_id===cliente.id;}).sort(function(a,b){return b.fecha.localeCompare(a.fecha);});
@@ -631,10 +679,25 @@ function DetalleCliente(props) {
           </div>;
         })
       }
+      {pdfHistorial.length>0&&<div>
+        <Sep label={"📄 Pedidos y Proformas ("+pdfHistorial.length+")"} />
+        {pdfHistorial.map(function(r){
+          return <div key={r.id} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 10px",background:"#f9f9f9",borderRadius:8,marginBottom:6}}>
+            <Badge color={DOC_COLORS[r.tipo]||"#888"} label={DOC_LABELS[r.tipo]||r.tipo} />
+            <span style={{fontFamily:"monospace",fontSize:11,color:"#185fa5",fontWeight:600}}>{r.numero}</span>
+            <span style={{flex:1,fontSize:11,color:"#888"}}>por {r.generado_por}</span>
+            <span style={{fontSize:11,color:"#aaa"}}>{r.created_at?new Date(r.created_at).toLocaleDateString("es-ES"):"—"}</span>
+            <button onClick={function(){props.onRePrint&&props.onRePrint(r);}}
+              style={{padding:"3px 10px",borderRadius:7,border:"none",background:"#185fa5",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>
+              🖨️
+            </button>
+          </div>;
+        })}
+      </div>}
     </Card>
   );
 }
-
+ 
 // ── IMPORT CLIENTES ───────────────────────────────────────────────────────────
 function ImportExcel(props) {
   var config=props.config,clients=props.clients,onImport=props.onImport,onClose=props.onClose,lineaActiva=props.lineaActiva;
@@ -749,7 +812,7 @@ function ImportExcel(props) {
     </Card>
   );
 }
-
+ 
 // ── IMPORT VENTAS ─────────────────────────────────────────────────────────────
 function ImportVentas(props) {
   var clients=props.clients,onImport=props.onImport,onClose=props.onClose;
@@ -846,7 +909,7 @@ function ImportVentas(props) {
     </Card>
   );
 }
-
+ 
 // ── GRÁFICO ───────────────────────────────────────────────────────────────────
 function VentasChart(props) {
   var data=props.data||[];
@@ -862,12 +925,924 @@ function VentasChart(props) {
   if(!data.length)return <div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>Sin datos.</div>;
   return <div style={{height:280,position:"relative"}}><canvas ref={canvasRef} /></div>;
 }
-
+ 
+// ── PEDIDOS / PROFORMAS ───────────────────────────────────────────────────────
+ 
+function usePedidosData(lineaActiva) {
+  var [pedidos,setPedidos]=useState([]);
+  var [productos,setProductos]=useState([]);
+  var [listas,setListas]=useState([]);
+  var [precios,setPrecios]=useState([]);
+  var [loading,setLoading]=useState(false);
+ 
+  var reload=useCallback(function(){
+    setLoading(true);
+    Promise.all([
+      sbGet("pedidos","linea_negocio=eq."+encodeURIComponent(lineaActiva)+"&order=id.desc"),
+      sbGet("productos","activo=eq.true&order=nombre.asc"),
+      sbGet("listas_precio","activo=eq.true&order=nombre.asc"),
+      sbGet("precios","select=*"),
+    ]).then(function(r){
+      setPedidos(r[0]);setProductos(r[1]);setListas(r[2]);setPrecios(r[3]);setLoading(false);
+    }).catch(function(){setLoading(false);});
+  },[lineaActiva]);
+ 
+  useEffect(function(){reload();},[reload]);
+  return {pedidos,productos,listas,precios,loading,reload};
+}
+ 
+// ── Gestión de Productos y Listas (dentro de Configuración o Pedidos) ─────────
+function ProductosManager(props) {
+  var {linColor,lineaActiva,currentUser}=props;
+  var [productos,setProductos]=useState([]);
+  var [listas,setListas]=useState([]);
+  var [precios,setPrecios]=useState([]);
+  var [tab,setTab]=useState("productos");
+  var [editProd,setEditProd]=useState(null);
+  var [editLista,setEditLista]=useState(null);
+  var [saving,setSaving]=useState(false);
+ 
+  // Líneas visibles según usuario
+  var lineasVisibles=currentUser&&currentUser.lineas?currentUser.lineas:LINEAS;
+  var [lineaFiltro,setLineaFiltro]=useState(lineaActiva);
+ 
+  var emptyProd={codigo:"",nombre:"",descripcion:"",unidad_medida:"Unidad",linea_negocio:lineaActiva,activo:true,
+    presentacion:"",sacos_por_pallet:"",unidades_por_caja:"",unidades_por_pallet:"",caducidad_meses:"",iva_producto:21};
+  var emptyLista={nombre:"",linea_negocio:lineaActiva,activo:true};
+ 
+  function reload(){
+    Promise.all([
+      sbGet("productos","order=nombre.asc"),
+      sbGet("listas_precio","order=nombre.asc"),
+      sbGet("precios","select=*"),
+    ]).then(function(r){setProductos(r[0]);setListas(r[1]);setPrecios(r[2]);});
+  }
+  useEffect(function(){reload();},[]);
+ 
+  function saveProd(f){
+    setSaving(true);
+    var body={
+      codigo:f.codigo,nombre:f.nombre,descripcion:f.descripcion||null,
+      unidad_medida:f.unidad_medida||"Unidad",
+      linea_negocio:f.linea_negocio||lineaActiva,activo:true,
+      presentacion:f.presentacion||null,
+      sacos_por_pallet:f.sacos_por_pallet?parseFloat(f.sacos_por_pallet):null,
+      unidades_por_caja:f.unidades_por_caja?parseFloat(f.unidades_por_caja):null,
+      unidades_por_pallet:f.unidades_por_pallet?parseFloat(f.unidades_por_pallet):null,
+      caducidad_meses:f.caducidad_meses?parseInt(f.caducidad_meses):null,
+      iva_producto:parseFloat(f.iva_producto||21),
+    };
+    var p=f.id?sbPatch("productos",f.id,body):sbPost("productos",body);
+    p.then(function(){reload();setEditProd(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
+  }
+  function deleteProd(id){if(!confirm("¿Eliminar producto?"))return;sbDel("productos",id).then(reload);}
+  function saveLista(f){
+    setSaving(true);
+    var body={nombre:f.nombre,linea_negocio:f.linea_negocio||lineaActiva,activo:true,condiciones:f.condiciones||null};
+    var p=f.id?sbPatch("listas_precio",f.id,body):sbPost("listas_precio",body);
+    p.then(function(){reload();setEditLista(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
+  }
+  function deleteLista(id){if(!confirm("¿Eliminar lista?"))return;sbDel("listas_precio",id).then(reload);}
+  function savePrecio(productoId,listaId,valor){
+    var existing=precios.find(function(p){return p.producto_id===productoId&&p.lista_id===listaId;});
+    var num=parseFloat(valor)||0;
+    if(existing){sbPatch("precios",existing.id,{precio:num}).then(reload);}
+    else{sbPost("precios",{producto_id:productoId,lista_id:listaId,precio:num}).then(reload);}
+  }
+  function getPrecio(prodId,listaId){var p=precios.find(function(x){return x.producto_id===prodId&&x.lista_id===listaId;});return p?p.precio:"";}
+ 
+  var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaFiltro;});
+  var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaFiltro;});
+ 
+  // Selector de línea visible cuando el usuario tiene acceso a ambas
+  function LineaSelector(){
+    if(lineasVisibles.length<=1)return null;
+    return <div style={{display:"flex",gap:4,background:"#f5f5f5",borderRadius:20,padding:3,marginBottom:16,width:"fit-content"}}>
+      {lineasVisibles.map(function(l){
+        return <button key={l} onClick={function(){setLineaFiltro(l);}}
+          style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,
+            background:lineaFiltro===l?(LINEA_COLOR[l]||linColor):"transparent",
+            color:lineaFiltro===l?"#fff":"#666"}}>
+          {l}
+        </button>;
+      })}
+    </div>;
+  }
+ 
+  return <div>
+    <LineaSelector />
+    <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"1px solid #eee"}}>
+      {[["productos","📦 Productos"],["listas","📋 Listas de precio"],["tabla","💰 Tabla de precios"]].map(function(item){
+        return <button key={item[0]} onClick={function(){setTab(item[0]);}}
+          style={{padding:"7px 14px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tab===item[0]?600:400,color:tab===item[0]?linColor:"#666",borderBottom:tab===item[0]?"2px solid "+linColor:"2px solid transparent",marginBottom:-1}}>
+          {item[1]}
+        </button>;
+      })}
+    </div>
+ 
+    {tab==="productos"&&<div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <span style={{fontSize:13,color:"#555"}}>Productos de <strong>{lineaFiltro}</strong> ({prodFilt.length})</span>
+        <Btn variant="primary" onClick={function(){setEditProd(Object.assign({},emptyProd,{linea_negocio:lineaFiltro}));}}>+ Producto</Btn>
+      </div>
+      {editProd&&<Card style={{marginBottom:16,border:"1px solid "+linColor+"44"}}>
+        <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>{editProd.id?"Editar producto":"Nuevo producto"}</div>
+        <FRow>
+          <FL label="Código *" flex={1}><Inp value={editProd.codigo} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{codigo:v});});}} placeholder="PROD001" /></FL>
+          <FL label="Nombre *" flex={3}><Inp value={editProd.nombre} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Nombre del producto" /></FL>
+          <FL label="Línea" flex={1}>
+            <select value={editProd.linea_negocio} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{linea_negocio:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {lineasVisibles.map(function(l){return <option key={l} value={l}>{l}</option>;})}
+            </select>
+          </FL>
+        </FRow>
+        <FRow>
+          <FL label="Presentación (ej: Kg, 500g, 1L)" flex={2}><Inp value={editProd.presentacion||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{presentacion:v});});}} placeholder="Ej: 500g, 1 Kg, 5L…" /></FL>
+          <FL label="Unidad de medida" flex={1}>
+            <select value={editProd.unidad_medida||"Unidad"} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{unidad_medida:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {UNIDADES_MEDIDA.map(function(u){return <option key={u} value={u}>{u}</option>;})}
+            </select>
+          </FL>
+          <FL label="IVA del producto" flex={1}>
+            <select value={editProd.iva_producto||21} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{iva_producto:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {IVA_TIPOS.map(function(i){return <option key={i.value} value={i.value}>{i.label}</option>;})}
+            </select>
+          </FL>
+        </FRow>
+        <FRow>
+          <FL label="Uds. por caja" flex={1}><Inp type="number" value={editProd.unidades_por_caja||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidades_por_caja:v});});}} placeholder="0" /></FL>
+          <FL label="Sacos por pallet" flex={1}><Inp type="number" value={editProd.sacos_por_pallet||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{sacos_por_pallet:v});});}} placeholder="0" /></FL>
+          <FL label="Uds. por pallet" flex={1}><Inp type="number" value={editProd.unidades_por_pallet||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidades_por_pallet:v});});}} placeholder="0" /></FL>
+          <FL label="Caducidad (meses)" flex={1}><Inp type="number" value={editProd.caducidad_meses||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{caducidad_meses:v});});}} placeholder="0" /></FL>
+        </FRow>
+        <FRow>
+          <FL label="Descripción"><Inp value={editProd.descripcion||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{descripcion:v});});}} placeholder="Descripción opcional" /></FL>
+        </FRow>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="primary" onClick={function(){saveProd(editProd);}} disabled={saving||!editProd.codigo||!editProd.nombre}>{saving?"Guardando…":"Guardar"}</Btn>
+          <Btn onClick={function(){setEditProd(null);}}>Cancelar</Btn>
+        </div>
+      </Card>}
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,background:"#fff",borderRadius:10}}>
+          <thead style={{background:"#f9f9f9"}}><tr>
+            {["Código","Nombre","Presentación","Unidad","Uds/Caja","Sacos/Pallet","Uds/Pallet","Caducidad","IVA",""].map(function(h){
+              return <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>;
+            })}
+          </tr></thead>
+          <tbody>{prodFilt.map(function(p){
+            return <tr key={p.id} style={{borderBottom:"1px solid #f5f5f5"}}>
+              <td style={{padding:"7px 10px",fontFamily:"monospace",fontSize:11,color:linColor,fontWeight:600}}>{p.codigo}</td>
+              <td style={{padding:"7px 10px",fontWeight:500,whiteSpace:"nowrap"}}>{p.nombre}</td>
+              <td style={{padding:"7px 10px",color:"#666"}}>{p.presentacion||"—"}</td>
+              <td style={{padding:"7px 10px"}}><Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} /></td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.unidades_por_caja||"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.sacos_por_pallet||"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.unidades_por_pallet||"—"}</td>
+              <td style={{padding:"7px 10px",textAlign:"center",color:"#555"}}>{p.caducidad_meses?p.caducidad_meses+" m":"—"}</td>
+              <td style={{padding:"7px 10px"}}><Badge color="#ba7517" label={(p.iva_producto||21)+"%"} /></td>
+              <td style={{padding:"7px 6px"}}>
+                <div style={{display:"flex",gap:4}}>
+                  <Btn onClick={function(){setEditProd(Object.assign({},p));}} style={{fontSize:11,padding:"3px 8px"}}>✏️</Btn>
+                  <Btn variant="danger" onClick={function(){deleteProd(p.id);}} style={{fontSize:11,padding:"3px 8px"}}>🗑️</Btn>
+                </div>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      {!prodFilt.length&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>No hay productos para <strong>{lineaFiltro}</strong>. Crea el primero.</div>}
+    </div>}
+ 
+    {tab==="listas"&&<div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <span style={{fontSize:13,color:"#555"}}>Listas de <strong>{lineaFiltro}</strong> ({listasFilt.length})</span>
+        <Btn variant="primary" onClick={function(){setEditLista(Object.assign({},emptyLista,{linea_negocio:lineaFiltro}));}}>+ Lista</Btn>
+      </div>
+      {editLista&&<Card style={{marginBottom:16,border:"1px solid "+linColor+"44"}}>
+        <div style={{fontSize:14,fontWeight:600,marginBottom:12}}>{editLista.id?"Editar lista":"Nueva lista de precio"}</div>
+        <FRow>
+          <FL label="Nombre de la lista" flex={2}><Inp value={editLista.nombre} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Ej: Tarifa General, Canal Farmacia…" /></FL>
+          <FL label="Línea" flex={1}>
+            <select value={editLista.linea_negocio} onChange={function(e){setEditLista(function(f){return Object.assign({},f,{linea_negocio:e.target.value});});}}
+              style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              {lineasVisibles.map(function(l){return <option key={l} value={l}>{l}</option>;})}
+            </select>
+          </FL>
+        </FRow>
+        <FRow>
+          <FL label="Condiciones comerciales (se imprime en Presupuesto)">
+            <Textarea value={editLista.condiciones||""} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{condiciones:v});});}} rows={3} placeholder="Ej: Pago a 30 días, portes incluidos a partir de 500€…" />
+          </FL>
+        </FRow>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="primary" onClick={function(){saveLista(editLista);}} disabled={saving||!editLista.nombre}>{saving?"Guardando…":"Guardar"}</Btn>
+          <Btn onClick={function(){setEditLista(null);}}>Cancelar</Btn>
+        </div>
+      </Card>}
+      <div style={{display:"flex",flexWrap:"wrap",gap:10}}>
+        {listasFilt.map(function(l){
+          return <div key={l.id} style={{padding:"12px 16px",background:"#fff",border:"1px solid #e8e8e8",borderRadius:10,display:"flex",alignItems:"center",gap:10}}>
+            <Badge color={LINEA_COLOR[l.linea_negocio]||"#888"} label={l.linea_negocio} />
+            <span style={{fontSize:13,fontWeight:600}}>{l.nombre}</span>
+            <Btn onClick={function(){setEditLista(Object.assign({},l));}} style={{fontSize:11,padding:"3px 8px"}}>✏️</Btn>
+            <Btn variant="danger" onClick={function(){deleteLista(l.id);}} style={{fontSize:11,padding:"3px 8px"}}>🗑️</Btn>
+          </div>;
+        })}
+        {!listasFilt.length&&<div style={{color:"#aaa",fontSize:13}}>No hay listas de precio para <strong>{lineaFiltro}</strong>.</div>}
+      </div>
+    </div>}
+ 
+    {tab==="tabla"&&<div>
+      <div style={{fontSize:13,color:"#555",marginBottom:12}}>Precios por producto y lista — <strong>{lineaFiltro}</strong></div>
+      {(!prodFilt.length||!listasFilt.length)
+        ?<div style={{color:"#aaa",fontSize:13,padding:"1rem"}}>Necesitas al menos un producto y una lista de precio en <strong>{lineaFiltro}</strong> para configurar la tabla.</div>
+        :<div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"collapse",fontSize:12,background:"#fff",borderRadius:10,minWidth:400}}>
+            <thead style={{background:"#f9f9f9"}}>
+              <tr>
+                <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>Producto</th>
+                <th style={{padding:"8px 12px",fontWeight:600,color:"#888",borderBottom:"1px solid #eee",fontSize:11}}>Unidad</th>
+                {listasFilt.map(function(l){return <th key={l.id} style={{padding:"8px 12px",textAlign:"center",fontWeight:600,color:linColor,borderBottom:"1px solid #eee",whiteSpace:"nowrap",minWidth:110}}>{l.nombre}</th>;})}
+              </tr>
+            </thead>
+            <tbody>{prodFilt.map(function(p){
+              return <tr key={p.id} style={{borderBottom:"1px solid #f5f5f5"}}>
+                <td style={{padding:"7px 12px",fontWeight:500,whiteSpace:"nowrap"}}>{p.nombre}{p.presentacion&&<span style={{marginLeft:6,fontSize:11,color:"#aaa"}}>{p.presentacion}</span>}</td>
+                <td style={{padding:"7px 12px"}}><Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} /></td>
+                {listasFilt.map(function(l){
+                  var val=getPrecio(p.id,l.id);
+                  return <td key={l.id} style={{padding:"4px 8px",textAlign:"center"}}>
+                    <input type="number" step="0.01" min="0"
+                      defaultValue={val}
+                      onBlur={function(e){savePrecio(p.id,l.id,e.target.value);}}
+                      style={{width:90,padding:"5px 8px",border:"1px solid #ddd",borderRadius:6,fontSize:12,textAlign:"right"}}
+                      placeholder="0.00" />
+                  </td>;
+                })}
+              </tr>;
+            })}</tbody>
+          </table>
+        </div>
+      }
+    </div>}
+  </div>;
+}
+ 
+// ── Editor de pedido/proforma/presupuesto ────────────────────────────────────
+function PedidoEditor(props) {
+  var {clients,lineaActiva,linColor,currentUser,onSaved,onCancel,initial,config}=props;
+  var [productos,setProductos]=useState([]);
+  var [listas,setListas]=useState([]);
+  var [precios,setPrecios]=useState([]);
+  var [saving,setSaving]=useState(false);
+  var [busqCli,setBusqCli]=useState("");
+  var [showDropdown,setShowDropdown]=useState(false);
+  var [busqProd,setBusqProd]=useState("");
+ 
+  var initForm={tipo:"pedido",cliente_id:"",lista_id:"",fecha:tod(),fecha_entrega:"",direccion_entrega:"",observaciones:"",gestor:currentUser.nombre,linea_negocio:lineaActiva};
+  var [form,setForm]=useState(initial?Object.assign({},initForm,initial):initForm);
+  var [lineas,setLineas]=useState(initial&&initial._lineas?initial._lineas:[]);
+ 
+  useEffect(function(){
+    Promise.all([
+      sbGet("productos","activo=eq.true&linea_negocio=eq."+encodeURIComponent(lineaActiva)+"&order=nombre.asc"),
+      sbGet("listas_precio","activo=eq.true&linea_negocio=eq."+encodeURIComponent(lineaActiva)+"&order=nombre.asc"),
+      sbGet("precios","select=*"),
+    ]).then(function(r){setProductos(r[0]);setListas(r[1]);setPrecios(r[2]);});
+  },[lineaActiva]);
+ 
+  useEffect(function(){
+    if(initial&&initial.cliente_id){
+      var c=clients.find(function(x){return x.id===parseInt(initial.cliente_id);});
+      if(c)setBusqCli(c.nombre);
+    }
+  },[]);
+ 
+  function set(k,v){setForm(function(f){return Object.assign({},f,{[k]:v});});}
+ 
+  function getPrecioLista(prodId,listaId){
+    if(!listaId)return 0;
+    var p=precios.find(function(x){return x.producto_id===prodId&&x.lista_id===parseInt(listaId);});
+    return p?p.precio:0;
+  }
+ 
+  function addLinea(prod){
+    if(lineas.find(function(l){return l.producto_id===prod.id;}))return;
+    var precio=getPrecioLista(prod.id,form.lista_id);
+    var iva=parseFloat(prod.iva_producto||21);
+    setLineas(function(prev){return prev.concat([{
+      producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,
+      unidad_medida:prod.unidad_medida||"Unidad",
+      presentacion:prod.presentacion||"",
+      unidades_por_caja:prod.unidades_por_caja||"",
+      unidades_por_pallet:prod.unidades_por_pallet||"",
+      cantidad:1,precio:precio,iva:iva,
+      subtotal:precio,iva_importe:precio*iva/100,total_linea:precio*(1+iva/100)
+    }]);});
+  }
+ 
+  function updateLinea(idx,k,v){
+    setLineas(function(prev){
+      return prev.map(function(l,i){
+        if(i!==idx)return l;
+        var upd=Object.assign({},l,{[k]:parseFloat(v)||0});
+        upd.subtotal=upd.cantidad*upd.precio;
+        upd.iva_importe=upd.subtotal*(upd.iva||21)/100;
+        upd.total_linea=upd.subtotal+upd.iva_importe;
+        return upd;
+      });
+    });
+  }
+ 
+  function removeLinea(idx){setLineas(function(prev){return prev.filter(function(_,i){return i!==idx;});});}
+ 
+  function handleListaChange(listaId){
+    set("lista_id",listaId);
+    setLineas(function(prev){return prev.map(function(l){
+      var p=precios.find(function(x){return x.producto_id===l.producto_id&&x.lista_id===parseInt(listaId);});
+      var precio=p?p.precio:l.precio;
+      var iva=l.iva||21;
+      var subtotal=parseFloat(l.cantidad||0)*precio;
+      return Object.assign({},l,{precio:precio,subtotal:subtotal,iva_importe:subtotal*iva/100,total_linea:subtotal*(1+iva/100)});
+    });});
+  }
+ 
+  var subtotalBase=lineas.reduce(function(s,l){return s+(l.subtotal||0);},0);
+  var gruposIva=lineas.reduce(function(acc,l){
+    var k=l.iva||21;
+    if(!acc[k])acc[k]={base:0,iva:0};
+    acc[k].base+=l.subtotal||0;
+    acc[k].iva+=l.iva_importe||0;
+    return acc;
+  },{});
+  var totalIvaSum=Object.values(gruposIva).reduce(function(s,g){return s+g.iva;},0);
+  var totalFinal=subtotalBase+totalIvaSum;
+ 
+  var clientesFilt=useMemo(function(){
+    var q=norm(busqCli);
+    return clients.filter(function(c){return c.linea_negocio===lineaActiva&&(!q||norm(c.nombre).indexOf(q)>=0||norm(c.codigo||"").indexOf(q)>=0);});
+  },[clients,lineaActiva,busqCli]);
+ 
+  var clienteSel=clients.find(function(c){return c.id===parseInt(form.cliente_id);});
+  var listaSel=listas.find(function(l){return l.id===parseInt(form.lista_id);});
+ 
+  var prodsFiltrados=useMemo(function(){
+    var q=norm(busqProd);
+    return productos.filter(function(p){return !q||norm(p.nombre).indexOf(q)>=0||norm(p.codigo||"").indexOf(q)>=0;});
+  },[productos,busqProd]);
+ 
+  function handleSave(){
+    if(!form.cliente_id||!lineas.length){alert("Selecciona un cliente y añade al menos un producto.");return;}
+    setSaving(true);
+    var prefixMap={pedido:"PED",proforma:"PRF",presupuesto:"PRE"};
+    var prefix=prefixMap[form.tipo]||"PED";
+    sbGet("pedidos","tipo=eq."+form.tipo+"&select=numero&order=id.desc&limit=1").then(function(rows){
+      var lastNum=0;
+      if(rows.length&&rows[0].numero){var m=rows[0].numero.match(/(\d+)$/);if(m)lastNum=parseInt(m[1]);}
+      var numero=prefix+"-"+lineaActiva.replace(/\s+/g,"").toUpperCase().slice(0,3)+"-"+String(lastNum+1).padStart(5,"0");
+      var body={numero:numero,tipo:form.tipo,cliente_id:parseInt(form.cliente_id),lista_id:form.lista_id?parseInt(form.lista_id):null,fecha:form.fecha,fecha_entrega:form.fecha_entrega||null,direccion_entrega:form.direccion_entrega||null,observaciones:form.observaciones||null,iva:21,subtotal:subtotalBase,total_iva:totalIvaSum,total:totalFinal,gestor:form.gestor||currentUser.nombre,linea_negocio:lineaActiva,estado:"Borrador"};
+      var saveP=form.id?sbPatch("pedidos",form.id,body):sbPost("pedidos",body);
+      return saveP.then(function(saved){
+        var pedidoId=form.id||(Array.isArray(saved)?saved[0].id:saved.id);
+        var delP=form.id?sbDelWhere("pedido_lineas","pedido_id=eq."+pedidoId):Promise.resolve();
+        return delP.then(function(){
+          var idx=0;
+          function nextL(){
+            if(idx>=lineas.length)return Promise.resolve({id:pedidoId,numero:numero});
+            var l=lineas[idx++];
+            var mostrarPrecio=(form.tipo==="proforma"||form.tipo==="presupuesto");
+            return sbPost("pedido_lineas",{pedido_id:pedidoId,producto_id:l.producto_id,codigo:l.codigo,nombre:l.nombre,unidad:l.unidad_medida,cantidad:l.cantidad,precio:mostrarPrecio?l.precio:0,subtotal:mostrarPrecio?l.subtotal:0,iva_linea:l.iva,iva_importe:mostrarPrecio?l.iva_importe:0,total_linea:mostrarPrecio?l.total_linea:0,presentacion:l.presentacion||null,unidades_por_caja:l.unidades_por_caja||null,unidades_por_pallet:l.unidades_por_pallet||null}).then(nextL);
+          }
+          return nextL();
+        });
+      });
+    }).then(function(result){setSaving(false);onSaved(result);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
+  }
+ 
+  var gestores=config&&config.gestores?config.gestores:[currentUser.nombre];
+  var esPrecio=(form.tipo==="proforma"||form.tipo==="presupuesto");
+ 
+  return <Card>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontSize:15,fontWeight:600}}>{form.id?"Editar":"Nuevo"}</span>
+        <div style={{display:"flex",gap:3,background:"#f5f5f5",borderRadius:20,padding:3}}>
+          {DOC_TIPOS.map(function(t){
+            return <button key={t} onClick={function(){set("tipo",t);}}
+              style={{padding:"4px 12px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,
+                background:form.tipo===t?(DOC_COLORS[t]||linColor):"transparent",
+                color:form.tipo===t?"#fff":"#666"}}>
+              {DOC_LABELS[t]}
+            </button>;
+          })}
+        </div>
+      </div>
+      <button onClick={onCancel} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>x</button>
+    </div>
+ 
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+      <div>
+        <div style={{fontSize:12,color:"#666",marginBottom:4}}>Cliente *</div>
+        <div style={{position:"relative"}}>
+          <input value={busqCli} onChange={function(e){setBusqCli(e.target.value);setShowDropdown(true);}} onFocus={function(){setShowDropdown(true);}}
+            placeholder="Buscar cliente..."
+            style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%"}} />
+          {showDropdown&&busqCli.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #ddd",borderRadius:8,boxShadow:"0 4px 16px rgba(0,0,0,0.1)",zIndex:100,maxHeight:200,overflowY:"auto"}}>
+            {clientesFilt.slice(0,20).map(function(c){
+              return <div key={c.id} onClick={function(){
+                  set("cliente_id",c.id);setBusqCli(c.nombre);setShowDropdown(false);
+                  var dir=[c.calle,c.numero].filter(Boolean).join(" ");
+                  if(c.cp||c.ciudad)dir+=(dir?", ":"")+[c.cp,c.ciudad].filter(Boolean).join(" ");
+                  if(c.pais)dir+=(dir?", ":"")+c.pais;
+                  if(!form.direccion_entrega)set("direccion_entrega",dir);
+                }}
+                style={{padding:"8px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #f5f5f5"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f5f5f5";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="";}}>
+                <span style={{fontWeight:500}}>{c.nombre}</span>
+                {c.codigo&&<span style={{fontSize:11,color:"#888",marginLeft:6}}>{c.codigo}</span>}
+              </div>;
+            })}
+            {clientesFilt.length===0&&<div style={{padding:"8px 12px",color:"#aaa",fontSize:12}}>Sin resultados</div>}
+          </div>}
+        </div>
+        {clienteSel&&<div style={{marginTop:8,padding:"10px 12px",background:"#f0fdf4",borderRadius:8,fontSize:12,border:"1px solid #86efac"}}>
+          <div style={{fontWeight:700,fontSize:13}}>{clienteSel.nombre}</div>
+          {clienteSel.codigo&&<div style={{color:"#888",fontSize:11}}>Cod: {clienteSel.codigo}</div>}
+          <div style={{color:"#555",marginTop:2}}>
+            {[clienteSel.calle,clienteSel.numero].filter(Boolean).join(" ")}
+            {(clienteSel.cp||clienteSel.ciudad)?", "+[clienteSel.cp,clienteSel.ciudad].filter(Boolean).join(" "):""}
+            {clienteSel.pais?", "+clienteSel.pais:""}
+          </div>
+          {clienteSel.telefono&&<div>Tel: {clienteSel.telefono}</div>}
+          {clienteSel.email&&<div>{clienteSel.email}</div>}
+          {clienteSel.nif&&<div>NIF: {clienteSel.nif}</div>}
+        </div>}
+      </div>
+ 
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <FRow>
+          <FL label="Fecha" flex={1}><Inp type="date" value={form.fecha} onChange={function(v){set("fecha",v);}} /></FL>
+          <FL label="Fecha entrega" flex={1}><Inp type="date" value={form.fecha_entrega} onChange={function(v){set("fecha_entrega",v);}} /></FL>
+        </FRow>
+        <FL label="Lista de precio">
+          <select value={form.lista_id} onChange={function(e){handleListaChange(e.target.value);}}
+            style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+            <option value="">Sin lista</option>
+            {listas.map(function(l){return <option key={l.id} value={l.id}>{l.nombre}</option>;})}
+          </select>
+        </FL>
+        <FL label="Gestor">
+          <select value={form.gestor} onChange={function(e){set("gestor",e.target.value);}}
+            style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+            {gestores.map(function(g){return <option key={g} value={g}>{g}</option>;})}
+          </select>
+        </FL>
+      </div>
+    </div>
+ 
+    <FRow>
+      <FL label="Direccion de entrega">
+        <Textarea value={form.direccion_entrega||""} onChange={function(v){set("direccion_entrega",v);}} placeholder="Direccion de entrega" rows={2} />
+      </FL>
+    </FRow>
+    <FRow>
+      <FL label="Observaciones">
+        <Textarea value={form.observaciones||""} onChange={function(v){set("observaciones",v);}} placeholder="Observaciones" rows={2} />
+      </FL>
+    </FRow>
+ 
+    <Sep label="Anadir productos" />
+    <div style={{marginBottom:10}}>
+      <input value={busqProd} onChange={function(e){setBusqProd(e.target.value);}}
+        placeholder="Buscar producto por nombre o codigo..."
+        style={{padding:"7px 12px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%",marginBottom:6}} />
+      <div style={{maxHeight:200,overflowY:"auto",border:"1px solid #eee",borderRadius:8,background:"#fff"}}>
+        {prodsFiltrados.length===0
+          ?<div style={{padding:"12px",color:"#aaa",fontSize:12,textAlign:"center"}}>No hay productos para esta linea. Crealos en Productos y precios.</div>
+          :prodsFiltrados.map(function(p){
+            var yaEsta=lineas.some(function(l){return l.producto_id===p.id;});
+            return <div key={p.id}
+              onClick={function(){if(!yaEsta)addLinea(p);}}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderBottom:"1px solid #f5f5f5",cursor:yaEsta?"default":"pointer",background:yaEsta?linColor+"08":"#fff"}}
+              onMouseEnter={function(e){if(!yaEsta)e.currentTarget.style.background="#f5f7ff";}}
+              onMouseLeave={function(e){e.currentTarget.style.background=yaEsta?linColor+"08":"#fff";}}>
+              <span style={{fontFamily:"monospace",fontSize:11,color:linColor,fontWeight:600,minWidth:70}}>{p.codigo}</span>
+              <span style={{flex:1,fontSize:13,fontWeight:500}}>{p.nombre}</span>
+              {p.presentacion&&<span style={{fontSize:11,color:"#888"}}>{p.presentacion}</span>}
+              <Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} />
+              {esPrecio&&<span style={{fontSize:11,color:"#1d9e75",fontWeight:600,minWidth:55,textAlign:"right"}}>
+                {form.lista_id?("EUR"+(getPrecioLista(p.id,form.lista_id)||0).toFixed(2)):"--"}
+              </span>}
+              {yaEsta
+                ?<span style={{fontSize:11,color:linColor,fontWeight:600}}>Anadido</span>
+                :<span style={{fontSize:11,color:"#378add",fontWeight:500}}>+ Anadir</span>}
+            </div>;
+          })
+        }
+      </div>
+    </div>
+ 
+    {lineas.length>0&&<div>
+      <Sep label={"Lineas del documento ("+lineas.length+")"} />
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead style={{background:"#f9f9f9"}}>
+            <tr>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Codigo</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Producto</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Unidad</th>
+              <th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Cantidad</th>
+              {esPrecio&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Precio</th>}
+              {esPrecio&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>IVA%</th>}
+              {esPrecio&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Base</th>}
+              {esPrecio&&<th style={{padding:"7px 10px",textAlign:"right",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Total c/IVA</th>}
+              <th style={{width:30,borderBottom:"1px solid #eee"}} />
+            </tr>
+          </thead>
+          <tbody>{lineas.map(function(l,idx){
+            return <tr key={idx} style={{borderBottom:"1px solid #f5f5f5"}}>
+              <td style={{padding:"6px 10px",fontFamily:"monospace",fontSize:11,color:linColor}}>{l.codigo}</td>
+              <td style={{padding:"6px 10px",fontWeight:500}}>{l.nombre}</td>
+              <td style={{padding:"6px 10px"}}><Badge color="#7f77dd" label={l.unidad_medida||"Unidad"} /></td>
+              <td style={{padding:"6px 4px",textAlign:"right"}}>
+                <input type="number" min="0" step="0.001" value={l.cantidad}
+                  onChange={function(e){updateLinea(idx,"cantidad",e.target.value);}}
+                  style={{width:70,padding:"4px 6px",border:"1px solid #ddd",borderRadius:6,fontSize:12,textAlign:"right"}} />
+              </td>
+              {esPrecio&&<td style={{padding:"6px 4px",textAlign:"right"}}>
+                <input type="number" min="0" step="0.01" value={l.precio}
+                  onChange={function(e){updateLinea(idx,"precio",e.target.value);}}
+                  style={{width:80,padding:"4px 6px",border:"1px solid #ddd",borderRadius:6,fontSize:12,textAlign:"right"}} />
+              </td>}
+              {esPrecio&&<td style={{padding:"6px 4px",textAlign:"right"}}>
+                <select value={l.iva} onChange={function(e){updateLinea(idx,"iva",e.target.value);}}
+                  style={{padding:"4px 6px",border:"1px solid #ddd",borderRadius:6,fontSize:11,background:"#fff"}}>
+                  {IVA_TIPOS.map(function(i){return <option key={i.value} value={i.value}>{i.label}</option>;})}
+                </select>
+              </td>}
+              {esPrecio&&<td style={{padding:"6px 10px",textAlign:"right",fontWeight:600}}>EUR{(l.subtotal||0).toFixed(2)}</td>}
+              {esPrecio&&<td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:"#1d9e75"}}>EUR{(l.total_linea||0).toFixed(2)}</td>}
+              <td style={{padding:"6px 4px",textAlign:"center"}}>
+                <button onClick={function(){removeLinea(idx);}} style={{background:"none",border:"none",cursor:"pointer",color:"#e24b4a",fontSize:16}}>x</button>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+ 
+      {esPrecio&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:12}}>
+        <div style={{background:"#f9f9f9",borderRadius:10,padding:"14px 20px",fontSize:13,minWidth:260,border:"1px solid #eee"}}>
+          <div style={{fontWeight:600,color:"#888",fontSize:11,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.5px"}}>Resumen fiscal</div>
+          {Object.keys(gruposIva).map(function(iva){
+            var g=gruposIva[iva];
+            return <div key={iva}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12}}><span style={{color:"#888"}}>Base {iva}%:</span><span>EUR{g.base.toFixed(2)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,fontSize:12}}><span style={{color:"#888"}}>IVA {iva}%:</span><span>EUR{g.iva.toFixed(2)}</span></div>
+            </div>;
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,borderTop:"1px solid #ddd",paddingTop:6,marginTop:4}}><span style={{color:"#888"}}>Total base:</span><span style={{fontWeight:600}}>EUR{subtotalBase.toFixed(2)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#888"}}>Total IVA:</span><span style={{fontWeight:600}}>EUR{totalIvaSum.toFixed(2)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",borderTop:"2px solid "+linColor,paddingTop:6,marginTop:4}}><span style={{fontWeight:700}}>TOTAL:</span><span style={{fontWeight:700,color:linColor,fontSize:16}}>EUR{totalFinal.toFixed(2)}</span></div>
+        </div>
+      </div>}
+    </div>}
+ 
+    <div style={{display:"flex",gap:8,marginTop:16}}>
+      <Btn variant="primary" onClick={handleSave} disabled={saving||!form.cliente_id||!lineas.length}>{saving?"Guardando...":"Guardar "+form.tipo}</Btn>
+      <Btn onClick={onCancel}>Cancelar</Btn>
+    </div>
+  </Card>;
+}
+ 
+ 
+// ── Generador de PDF ──────────────────────────────────────────────────────────
+function generarPDF(pedido, lineas, cliente, currentUser, logoUrl, idioma) {
+  var lang = idioma || "es";
+  var tr = T[lang] || T["es"];
+  var info = EMPRESA_INFO[pedido.linea_negocio] || EMPRESA_INFO["La Sin Gluten"];
+  var esProforma = pedido.tipo === "proforma";
+  var esPresupuesto = pedido.tipo === "presupuesto";
+  var esPedido = pedido.tipo === "pedido";
+  var titulo = tr[pedido.tipo] || pedido.tipo.toUpperCase();
+  var linColor = LINEA_COLOR[pedido.linea_negocio] || "#5bb5bc";
+ 
+  var dirCli = "";
+  if (cliente) {
+    if (cliente.calle) dirCli += cliente.calle;
+    if (cliente.numero) dirCli += (dirCli ? " " : "") + cliente.numero;
+    if (cliente.cp || cliente.ciudad) dirCli += (dirCli ? ", " : "") + [cliente.cp, cliente.ciudad].filter(Boolean).join(" ");
+    if (cliente.provincia) dirCli += (dirCli ? ", " : "") + cliente.provincia;
+    if (cliente.pais) dirCli += (dirCli ? ", " : "") + cliente.pais;
+  }
+ 
+  var gruposIva = {};
+  if (esProforma) {
+    lineas.forEach(function (l) {
+      var k = l.iva_linea || l.iva || 21;
+      if (!gruposIva[k]) gruposIva[k] = { base: 0, iva_imp: 0 };
+      gruposIva[k].base += parseFloat(l.subtotal || 0);
+      gruposIva[k].iva_imp += parseFloat(l.iva_importe || 0);
+    });
+  }
+  var totalBase = lineas.reduce(function (s, l) { return s + parseFloat(l.subtotal || 0); }, 0);
+  var totalIvaSum = Object.values(gruposIva).reduce(function (s, g) { return s + g.iva_imp; }, 0);
+  var totalFinal = totalBase + totalIvaSum;
+ 
+  var theadHTML = "";
+  var tbodyHTML = "";
+ 
+  if (esPresupuesto) {
+    theadHTML = "<tr><th>" + tr.codigo + "</th><th>" + tr.producto + "</th><th>" + tr.presentacion + "</th><th class=r>" + tr.uds_caja + "</th><th class=r>" + tr.uds_pallet + "</th><th class=r>" + tr.iva_pct + "</th><th class=r>" + tr.precio + "</th></tr>";
+    tbodyHTML = lineas.map(function (l) {
+      var iva = l.iva_linea || l.iva || 21;
+      return "<tr><td class=mono>" + (l.codigo||"") + "</td><td style='font-weight:500'>" + l.nombre + "</td><td>" + (l.presentacion||l.unidad||"") + "</td><td class=r>" + (l.unidades_por_caja||"") + "</td><td class=r>" + (l.unidades_por_pallet||"") + "</td><td class=r><b style='color:#ba7517'>" + iva + "%</b></td><td class=r><b>" + parseFloat(l.precio||0).toFixed(2) + "</b></td></tr>";
+    }).join("");
+  } else if (esProforma) {
+    theadHTML = "<tr><th>" + tr.codigo + "</th><th>" + tr.producto + "</th><th>" + tr.unidad + "</th><th class=r>" + tr.cantidad + "</th><th class=r>" + tr.precio + "</th><th class=r>" + tr.base + "</th><th class=r>" + tr.iva_pct + "</th><th class=r>" + tr.total_iva + "</th></tr>";
+    tbodyHTML = lineas.map(function (l) {
+      var iva = l.iva_linea || l.iva || 21;
+      return "<tr><td class=mono>" + (l.codigo||"") + "</td><td style='font-weight:500'>" + l.nombre + "</td><td>" + (l.unidad||"Unidad") + "</td><td class=r><b>" + l.cantidad + "</b></td><td class=r>" + parseFloat(l.precio||0).toFixed(2) + "</td><td class=r>" + parseFloat(l.subtotal||0).toFixed(2) + "</td><td class=r><b style='color:#ba7517'>" + iva + "%</b></td><td class=r style='font-weight:700;color:#1d9e75'>" + parseFloat(l.total_linea||0).toFixed(2) + "</td></tr>";
+    }).join("");
+  } else {
+    theadHTML = "<tr><th>" + tr.codigo + "</th><th>" + tr.producto + "</th><th>" + tr.unidad + "</th><th class=r>" + tr.cantidad + "</th></tr>";
+    tbodyHTML = lineas.map(function (l) {
+      return "<tr><td class=mono>" + (l.codigo||"") + "</td><td style='font-weight:500'>" + l.nombre + "</td><td>" + (l.unidad||"Unidad") + "</td><td class=r><b>" + l.cantidad + "</b></td></tr>";
+    }).join("");
+  }
+ 
+  var totalesHTML = "";
+  if (esProforma) {
+    var ivaRows = Object.keys(gruposIva).map(function (iva) {
+      var g = gruposIva[iva];
+      return "<div class=trow><span>" + tr.base + " " + iva + "%:</span><span>" + g.base.toFixed(2) + "</span></div><div class=trow><span>IVA " + iva + "%:</span><span>" + g.iva_imp.toFixed(2) + "</span></div>";
+    }).join("");
+    totalesHTML = "<div class=totales><div class=tbox><div class=tlabel>" + tr.resumen + "</div>" + ivaRows + "<div class='trow sep'><span>" + tr.base_imp + ":</span><span><b>" + totalBase.toFixed(2) + "</b></span></div><div class=trow><span>" + tr.total_iva_r + ":</span><span><b>" + totalIvaSum.toFixed(2) + "</b></span></div><div class='trow total'><span>" + tr.total + "</span><span>" + totalFinal.toFixed(2) + "</span></div></div></div>";
+  } else if (esPedido) {
+    totalesHTML = "<p style='text-align:right;font-size:10px;color:#aaa;margin-top:4px'>* " + tr.sin_valorizar + "</p>";
+  }
+ 
+  var condicionesHTML = "";
+  if (esPresupuesto && pedido._condiciones_lista) {
+    condicionesHTML = "<div class=cond><h3>" + tr.condiciones + "</h3><p>" + pedido._condiciones_lista + "</p></div>";
+  }
+ 
+  var css = "body{font-family:Arial,sans-serif;font-size:12px;color:#222;padding:28px;}"
+    + ".hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid " + linColor + ";}"
+    + ".logo{width:80px;height:80px;object-fit:contain;}"
+    + ".emp{flex:1;margin-left:14px;}"
+    + ".emp h2{font-size:14px;color:" + linColor + ";margin-bottom:4px;}"
+    + ".emp p{font-size:10px;color:#555;line-height:1.6;}"
+    + ".dtitle{text-align:right;min-width:160px;}"
+    + ".dtitle h1{font-size:26px;font-weight:900;color:" + linColor + ";letter-spacing:2px;}"
+    + ".dtitle .num{font-size:14px;font-weight:700;margin-top:4px;}"
+    + ".dtitle p{font-size:10px;color:#666;margin-top:3px;}"
+    + ".g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}"
+    + ".box{background:#f8f8f8;border-radius:6px;padding:10px 14px;border:1px solid #eee;}"
+    + ".box h3{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:5px;}"
+    + ".box div{font-size:11px;line-height:1.7;}"
+    + "table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11px;}"
+    + "thead tr{background:" + linColor + ";color:#fff;}"
+    + "th{padding:8px 9px;text-align:left;font-size:10px;font-weight:700;}"
+    + "th.r,td.r{text-align:right;}"
+    + "td{padding:7px 9px;border-bottom:1px solid #f0f0f0;}"
+    + "td.mono{font-family:monospace;font-size:10px;color:" + linColor + ";font-weight:600;}"
+    + "tr:nth-child(even) td{background:#fafafa;}"
+    + ".totales{display:flex;justify-content:flex-end;margin-top:6px;}"
+    + ".tbox{width:240px;border:1px solid #eee;border-radius:8px;padding:12px 16px;background:#fafafa;}"
+    + ".tlabel{font-weight:700;font-size:10px;text-transform:uppercase;color:#888;margin-bottom:6px;}"
+    + ".trow{display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px;}"
+    + ".trow.sep{border-top:1px solid #ddd;padding-top:5px;margin-top:4px;}"
+    + ".trow.total{font-size:14px;font-weight:700;border-top:2px solid " + linColor + ";padding-top:6px;margin-top:5px;color:" + linColor + ";}"
+    + ".entrega{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:9px 13px;margin-bottom:12px;}"
+    + ".entrega h3{font-size:9px;text-transform:uppercase;color:#1d9e75;margin-bottom:3px;}"
+    + ".obs{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:10px;}"
+    + ".cond{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;margin-top:14px;font-size:11px;}"
+    + ".cond h3{font-size:9px;text-transform:uppercase;color:#1e40af;margin-bottom:4px;}"
+    + ".footer{margin-top:20px;padding-top:10px;border-top:1px solid #eee;font-size:9px;color:#aaa;text-align:center;}";
+ 
+  var cliBlock = "<div class=box><h3>" + tr.cliente + "</h3>"
+    + "<div><b>" + (cliente ? cliente.nombre : "") + "</b></div>"
+    + (cliente&&cliente.codigo ? "<div style='color:#888;font-size:10px'>Cod: " + cliente.codigo + "</div>" : "")
+    + (dirCli ? "<div>" + dirCli + "</div>" : "")
+    + (cliente&&cliente.telefono ? "<div>" + tr.tel + ": " + cliente.telefono + "</div>" : "")
+    + (cliente&&cliente.movil ? "<div>" + cliente.movil + "</div>" : "")
+    + (cliente&&cliente.email ? "<div>" + cliente.email + "</div>" : "")
+    + (cliente&&cliente.nif ? "<div>" + tr.nif + ": " + cliente.nif + "</div>" : "")
+    + (cliente&&cliente.persona_contacto ? "<div>" + cliente.persona_contacto + "</div>" : "")
+    + "</div>";
+ 
+  var detBlock = "<div class=box><h3>" + tr.detalles + "</h3>"
+    + "<div>" + tr.tipo + ": <b>" + titulo + "</b></div>"
+    + "<div>" + tr.linea + ": <b>" + pedido.linea_negocio + "</b></div>"
+    + (esPresupuesto && pedido._lista_nombre ? "<div>" + tr.lista_precio + ": <b>" + pedido._lista_nombre + "</b></div>" : "")
+    + "<div>" + tr.estado + ": <b>" + (pedido.estado||"Borrador") + "</b></div>"
+    + "</div>";
+ 
+  var html = "<!DOCTYPE html><html lang=" + lang + "><head><meta charset=UTF-8><style>" + css + "</style></head><body>"
+    + "<div class=hdr>"
+    + "<div style='display:flex;align-items:center'>"
+    + "<img class=logo src='" + logoUrl + "' alt=Logo>"
+    + "<div class=emp><h2>" + info.razon + "</h2><p>" + tr.nif + ": " + info.nif + "<br>" + info.direccion + "<br>" + tr.tel + ": " + info.telefono + "</p></div>"
+    + "</div>"
+    + "<div class=dtitle><h1>" + titulo + "</h1><div class=num>" + pedido.numero + "</div>"
+    + "<p>" + tr.fecha + ": <b>" + pedido.fecha + "</b></p>"
+    + (pedido.fecha_entrega ? "<p>" + tr.entrega + ": <b>" + pedido.fecha_entrega + "</b></p>" : "")
+    + "<p style='color:#888'>" + tr.gestor + ": " + pedido.gestor + "</p>"
+    + "</div></div>"
+    + "<div class=g2>" + cliBlock + detBlock + "</div>"
+    + (pedido.direccion_entrega ? "<div class=entrega><h3>" + tr.dir_entrega + "</h3><div>" + pedido.direccion_entrega + "</div></div>" : "")
+    + (pedido.observaciones ? "<div class=obs><b>" + tr.observaciones + ":</b> " + pedido.observaciones + "</div>" : "")
+    + "<table><thead>" + theadHTML + "</thead><tbody>" + tbodyHTML + "</tbody></table>"
+    + totalesHTML
+    + condicionesHTML
+    + "<div class=footer>" + info.razon + " | " + tr.nif + ": " + info.nif + " | " + tr.generado + " " + new Date().toLocaleDateString(lang==="en"?"en-GB":"es-ES") + " | " + pedido.numero + "</div>"
+    + "</body></html>";
+ 
+  var w = window.open("", "_blank", "width=950,height=750");
+  if (!w) { alert("Permite ventanas emergentes para generar el PDF."); return; }
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function () { w.print(); }, 700);
+}
+ 
+ 
+// ── Modal selector de idioma ──────────────────────────────────────────────────
+function ModalIdioma(props) {
+  var { onSelect, onCancel } = props;
+  return <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: "#fff", borderRadius: 14, padding: "28px 32px", minWidth: 280, boxShadow: "0 8px 32px rgba(0,0,0,0.18)", textAlign: "center" }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Generar PDF</div>
+      <div style={{ fontSize: 13, color: "#666", marginBottom: 20 }}>Selecciona el idioma del documento</div>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        {IDIOMAS.map(function (id) {
+          return <button key={id.value} onClick={function () { onSelect(id.value); }}
+            style={{ padding: "12px 24px", borderRadius: 10, border: "2px solid #e0e0e0", background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 600 }}>
+            {id.label}
+          </button>;
+        })}
+      </div>
+      <button onClick={onCancel} style={{ marginTop: 16, background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
+    </div>
+  </div>;
+}
+ 
+// ── Tab Pedidos ────────────────────────────────────────────────────────────────
+function TabPedidos(props) {
+  var { clients, config, currentUser, lineaActiva, linColor } = props;
+  var { pedidos, productos, listas, precios, loading: loadingP, reload } = usePedidosData(lineaActiva);
+  var [view, setView] = useState("lista");
+  var [selected, setSelected] = useState(null);
+  var [filtroTipo, setFiltroTipo] = useState("");
+  var [filtroEstado, setFiltroEstado] = useState("");
+  var [modalIdioma, setModalIdioma] = useState(null); // pedido obj waiting for idioma
+ 
+  function handleSaved() { reload(); setView("lista"); }
+ 
+  function handleGenerarPDF(pedido, idioma) {
+    sbGet("pedido_lineas", "pedido_id=eq." + pedido.id + "&order=id.asc").then(function (lineas) {
+      var cliente = clients.find(function (c) { return c.id === pedido.cliente_id; });
+      var logoUrl = LINEA_LOGO[pedido.linea_negocio] || LINEA_LOGO["La Sin Gluten"];
+      // Attach lista info for presupuesto
+      var lista = listas.find(function (l) { return l.id === pedido.lista_id; });
+      var pedidoConDatos = Object.assign({}, pedido, {
+        _condiciones_lista: lista ? lista.condiciones : null,
+        _lista_nombre: lista ? lista.nombre : null,
+      });
+      generarPDF(pedidoConDatos, lineas, cliente, currentUser, logoUrl, idioma);
+    }).catch(function (e) { alert("Error cargando líneas: " + e.message); });
+  }
+ 
+  function openModalIdioma(pedido) { setModalIdioma(pedido); }
+ 
+  function handleDelete(pedido) {
+    if (!confirm("¿Eliminar " + pedido.tipo + " " + pedido.numero + "?")) return;
+    sbDel("pedidos", pedido.id).then(function () { reload(); setSelected(null); }).catch(function (e) { alert("Error: " + e.message); });
+  }
+ 
+  var pedidosFilt = pedidos.filter(function (p) {
+    if (filtroTipo && p.tipo !== filtroTipo) return false;
+    if (filtroEstado && p.estado !== filtroEstado) return false;
+    return true;
+  });
+ 
+  var ESTADOS_PED = ["Borrador", "Confirmado", "En preparación", "Enviado", "Completado", "Cancelado"];
+  var ESTADOS_C = { Borrador: "#888", Confirmado: "#185fa5", "En preparación": "#ba7517", Enviado: "#7f77dd", Completado: "#1d9e75", Cancelado: "#e24b4a" };
+ 
+  function handleEstado(pedido, estado) {
+    sbPatch("pedidos", pedido.id, { estado: estado }).then(function () { reload(); }).catch(function (e) { alert("Error: " + e.message); });
+  }
+ 
+  if (view === "nuevo" || view === "editar") {
+    return <PedidoEditor
+      clients={clients} lineaActiva={lineaActiva} linColor={linColor}
+      currentUser={currentUser} config={config}
+      initial={view === "editar" ? selected : null}
+      onSaved={handleSaved}
+      onCancel={function () { setView("lista"); }} />;
+  }
+ 
+  if (view === "config") {
+    return <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <Btn onClick={function () { setView("lista"); }}>← Volver</Btn>
+        <span style={{ fontSize: 15, fontWeight: 600 }}>⚙️ Productos y Precios</span>
+      </div>
+      <ProductosManager linColor={linColor} lineaActiva={lineaActiva} currentUser={currentUser} />
+    </div>;
+  }
+ 
+  return <div>
+    {modalIdioma && <ModalIdioma onSelect={function (lang) { handleGenerarPDF(modalIdioma, lang); setModalIdioma(null); }} onCancel={function () { setModalIdioma(null); }} />}
+ 
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
+      <Btn variant="primary" onClick={function () { setSelected(null); setView("nuevo"); }}>+ Nuevo documento</Btn>
+      <Btn onClick={function () { setView("config"); }}>⚙️ Productos y precios</Btn>
+      <div style={{ flex: 1 }} />
+      <div style={{ width: 140 }}>
+        <select value={filtroTipo} onChange={function (e) { setFiltroTipo(e.target.value); }}
+          style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }}>
+          <option value="">Todos los tipos</option>
+          {DOC_TIPOS.map(function (t) { return <option key={t} value={t}>{DOC_LABELS[t]}</option>; })}
+        </select>
+      </div>
+      <div style={{ width: 160 }}>
+        <select value={filtroEstado} onChange={function (e) { setFiltroEstado(e.target.value); }}
+          style={{ padding: "7px 10px", border: "1px solid #ddd", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" }}>
+          <option value="">Todos los estados</option>
+          {ESTADOS_PED.map(function (s) { return <option key={s} value={s}>{s}</option>; })}
+        </select>
+      </div>
+      {(filtroTipo || filtroEstado) && <Btn onClick={function () { setFiltroTipo(""); setFiltroEstado(""); }}>Limpiar</Btn>}
+    </div>
+ 
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
+      {[
+        ["Total documentos", pedidos.length, "#185fa5"],
+        ["Pedidos", pedidos.filter(function (p) { return p.tipo === "pedido"; }).length, "#378add"],
+        ["Proformas", pedidos.filter(function (p) { return p.tipo === "proforma"; }).length, "#7f77dd"],
+        ["Presupuestos", pedidos.filter(function (p) { return p.tipo === "presupuesto"; }).length, "#1d9e75"],
+      ].map(function (item) {
+        return <div key={item[0]} style={{ background: "#fff", border: "1px solid #e8e8e8", borderRadius: 8, padding: "0.75rem 1rem" }}>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 2 }}>{item[0]}</div>
+          <div style={{ fontSize: 22, fontWeight: 600, color: item[2] }}>{item[1]}</div>
+        </div>;
+      })}
+    </div>
+ 
+    {loadingP ? <Spinner /> : <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 10 }}>
+        <thead style={{ background: "#f9f9f9" }}>
+          <tr>{["Número", "Tipo", "Cliente", "Fecha", "Entrega", "Estado", "Total", "PDF", ""].map(function (h) {
+            return <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#555", fontSize: 12, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>{h}</th>;
+          })}</tr>
+        </thead>
+        <tbody>{pedidosFilt.map(function (p) {
+          var cliente = clients.find(function (c) { return c.id === p.cliente_id; });
+          return <tr key={p.id} style={{ borderBottom: "1px solid #f0f0f0" }}>
+            <td style={{ padding: "9px 10px", fontFamily: "monospace", fontSize: 11, fontWeight: 600, color: linColor }}>{p.numero}</td>
+            <td style={{ padding: "9px 10px" }}><Badge color={DOC_COLORS[p.tipo] || "#888"} label={DOC_LABELS[p.tipo] || p.tipo} /></td>
+            <td style={{ padding: "9px 10px", fontWeight: 500 }}>{cliente ? cliente.nombre : "—"}</td>
+            <td style={{ padding: "9px 10px", fontSize: 12 }}>{p.fecha}</td>
+            <td style={{ padding: "9px 10px", fontSize: 12, color: p.fecha_entrega ? "#333" : "#aaa" }}>{p.fecha_entrega || "—"}</td>
+            <td style={{ padding: "9px 10px" }}>
+              <select value={p.estado || "Borrador"} onChange={function (e) { handleEstado(p, e.target.value); }}
+                style={{ padding: "3px 8px", border: "1px solid " + ((ESTADOS_C[p.estado] || "#888") + "44"), borderRadius: 12, fontSize: 11, background: (ESTADOS_C[p.estado] || "#888") + "11", color: ESTADOS_C[p.estado] || "#888", cursor: "pointer" }}>
+                {ESTADOS_PED.map(function (s) { return <option key={s} value={s}>{s}</option>; })}
+              </select>
+            </td>
+            <td style={{ padding: "9px 10px", textAlign: "right", fontWeight: 600, color: p.tipo !== "pedido" ? "#1d9e75" : "#aaa" }}>
+              {p.tipo !== "pedido" ? "€" + parseFloat(p.total || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 }) : "—"}
+            </td>
+            <td style={{ padding: "9px 6px" }}>
+              <button onClick={function () { openModalIdioma(p); }}
+                style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: "#185fa5", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                🖨️ PDF
+              </button>
+            </td>
+            <td style={{ padding: "9px 6px" }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                <Btn onClick={function () { setSelected(p); setView("editar"); }} style={{ fontSize: 11, padding: "4px 8px" }}>✏️</Btn>
+                <Btn variant="danger" onClick={function () { handleDelete(p); }} style={{ fontSize: 11, padding: "4px 8px" }}>🗑️</Btn>
+              </div>
+            </td>
+          </tr>;
+        })}</tbody>
+      </table>
+      {pedidosFilt.length === 0 && <div style={{ textAlign: "center", color: "#aaa", padding: "2rem", fontSize: 13 }}>Sin documentos. Crea tu primer pedido, proforma o presupuesto.</div>}
+    </div>}
+  </div>;
+}
+ 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
   var sesion=null;
   try{var s=sessionStorage.getItem("crm_session");if(s)sesion=JSON.parse(s);}catch(e){}
-
+ 
   var [currentUser,setCurrentUser]=useState(sesion);
   var [lineaActiva,setLineaActiva]=useState(sesion?sesion.lineaActiva:"La Sin Gluten");
   var [tab,setTab]=useState("Dashboard");
@@ -890,13 +1865,13 @@ function CRM() {
   var [dashGestor,setDashGestor]=useState("");
   var [ventasFiltro,setVentasFiltro]=useState({canal:"",gestor:"",grupo:"",mes:"",anio:String(CY),groupBy:"mes"});
   var [newVal,setNewVal]=useState({canal:"",grupo:"",gestor:""});
-
+ 
   function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
-
+ 
   var clientsFiltLinea=useMemo(function(){return clients.filter(function(c){return c.linea_negocio===lineaActiva;});},[clients,lineaActiva]);
   var activitiesFiltLinea=useMemo(function(){return activities.filter(function(a){return a.linea_negocio===lineaActiva;});},[activities,lineaActiva]);
   var ventasFiltLinea=useMemo(function(){return ventas.filter(function(v){return v.linea_negocio===lineaActiva;});},[ventas,lineaActiva]);
-
+ 
   var loadAll=useCallback(function(){
     setLoading(true);setError(null);
     Promise.all([
@@ -911,7 +1886,7 @@ function CRM() {
       setConfigState(cfg);setClients(cls);setActivities(acts);setVentas(vts);setLoading(false);
     }).catch(function(e){setError("No se pudo conectar. "+e.message);setLoading(false);});
   },[]);
-
+ 
   useEffect(function(){if(currentUser)loadAll();},[currentUser]);
   useEffect(function(){
     if(currentUser&&config.gestores.length){
@@ -922,7 +1897,7 @@ function CRM() {
       }
     }
   },[currentUser,config.gestores.length]);
-
+ 
   function handleLogin(u){sessionStorage.setItem("crm_session",JSON.stringify(u));setCurrentUser(u);setLineaActiva(u.lineaActiva);}
   function handleLogout(){sessionStorage.removeItem("crm_session");setCurrentUser(null);}
   function cambiarLinea(l){
@@ -931,14 +1906,14 @@ function CRM() {
     setCurrentUser(u);sessionStorage.setItem("crm_session",JSON.stringify(u));
     setDetalleId(null);setClientPanel(null);setActPanel(null);setBusqueda("");setPagina(1);
   }
-
+ 
   function saveConfig(key,arr){
     return sbGet("config","clave=eq."+key+"&select=id").then(function(rows){
       if(rows.length)return sbPatch("config",rows[0].id,{valor:arr});
       else return sbPost("config",{clave:key,valor:arr});
     }).then(function(){setConfigState(function(prev){return Object.assign({},prev,{[key]:arr});});});
   }
-
+ 
   // FIX: saveClient migra actividades si cambia línea de negocio
   function saveClient(form,contactos){
     setSaving(true);
@@ -981,12 +1956,12 @@ function CRM() {
       });
     }).then(function(){return loadAll();}).then(function(){setClientPanel(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
-
+ 
   function deleteClient(id){
     if(!confirm("¿Eliminar este cliente?"))return;
     sbDel("clientes",id).then(function(){return loadAll();}).then(function(){setDetalleId(null);}).catch(function(e){alert("Error: "+e.message);});
   }
-
+ 
   function saveActivity(form){
     setSaving(true);
     var body={cliente_id:form.clienteId,tipo:form.tipo,titulo:form.titulo||"",nota:form.nota,fecha:form.fecha,gestor:form.gestor,estado:form.estado||"Pendiente",prioridad:form.prioridad||"Media",linea_negocio:form.linea_negocio||lineaActiva};
@@ -996,7 +1971,7 @@ function CRM() {
   function deleteActivity(id){
     sbDel("actividades",id).then(function(){setActivities(function(prev){return prev.filter(function(a){return a.id!==id;});});}).catch(function(e){alert("Error: "+e.message);});
   }
-
+ 
   var filteredClients=useMemo(function(){
     var q=norm(busqueda);
     return clientsFiltLinea.filter(function(c){
@@ -1008,12 +1983,12 @@ function CRM() {
       return true;
     });
   },[clientsFiltLinea,filter,busqueda]);
-
+ 
   useEffect(function(){setPagina(1);},[busqueda,filter,lineaActiva]);
-
+ 
   var totalFiltrados=filteredClients.length;
   var clientesPagina=filteredClients.slice((pagina-1)*POR_PAGINA,pagina*POR_PAGINA);
-
+ 
   var ventasFilt=useMemo(function(){return ventasFiltLinea.filter(function(v){
     var cliente=clients.find(function(c){return c.id===v.cliente_id;});
     if(ventasFiltro.canal&&(!cliente||cliente.canal!==ventasFiltro.canal))return false;
@@ -1023,20 +1998,20 @@ function CRM() {
     if(ventasFiltro.anio&&String(v.anio)!==ventasFiltro.anio)return false;
     return true;
   });},[ventasFiltLinea,ventasFiltro,clients]);
-
+ 
   var ventasChart=useMemo(function(){
     if(ventasFiltro.groupBy==="gestor")return ventasFilt.map(function(v){return Object.assign({},v,{label:v.gestor||"Sin gestor"});});
     if(ventasFiltro.groupBy==="canal"){return ventasFilt.map(function(v){var c=clients.find(function(x){return x.id===v.cliente_id;});return Object.assign({},v,{label:c?c.canal:"Sin canal"});});}
     if(ventasFiltro.groupBy==="cliente")return ventasFilt.map(function(v){return Object.assign({},v,{label:clientName(v.cliente_id)});});
     return ventasFilt.map(function(v){return Object.assign({},v,{label:(MESES[(v.mes||1)-1]||"").slice(0,3)+" "+v.anio});});
   },[ventasFilt,ventasFiltro.groupBy]);
-
+ 
   if(!currentUser)return <Login onLogin={handleLogin} />;
-
+ 
   var linColor=LINEA_COLOR[lineaActiva]||"#5bb5bc";
   var linGrad=LINEA_GRAD[lineaActiva]||LINEA_GRAD["La Sin Gluten"];
   var linLogo=LINEA_LOGO[lineaActiva]||LINEA_LOGO["La Sin Gluten"];
-
+ 
   // FIX Dashboard: muestra título + nombre cliente, scroll, sin límite de 5
   function Dashboard(){
     var totalC=clientsFiltLinea.filter(function(c){return c.tipo_cliente==="Cliente"&&(!dashGestor||c.gestor===dashGestor);}).length;
@@ -1086,13 +2061,30 @@ function CRM() {
       </div>
     </div>;
   }
-
+ 
   function TabClientes(){
     return <div>
       {showImportCli&&<ImportExcel config={config} clients={clients} onImport={function(){loadAll().then(function(){setShowImportCli(false);});}} onClose={function(){setShowImportCli(false);}} lineaActiva={lineaActiva} />}
       {clientPanel==="new"&&<ClienteForm initial={{}} config={config} clients={clients} onSave={saveClient} onCancel={function(){setClientPanel(null);}} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
       {clientPanel&&clientPanel!=="new"&&<ClienteForm initial={clientPanel} config={config} clients={clients} onSave={saveClient} onCancel={function(){setClientPanel(null);}} saving={saving} currentUser={currentUser} lineaActiva={lineaActiva} />}
-      {detalleId&&!clientPanel&&<DetalleCliente cliente={clients.find(function(c){return c.id===detalleId;})} activities={activitiesFiltLinea} onClose={function(){setDetalleId(null);}} />}
+      {detalleId&&!clientPanel&&<DetalleCliente cliente={clients.find(function(c){return c.id===detalleId;})} activities={activitiesFiltLinea} onClose={function(){setDetalleId(null);}}
+        onRePrint={function(pdfRec){
+          sbGet("pedidos","id=eq."+pdfRec.pedido_id).then(function(rows){
+            if(!rows.length)return;
+            var pedido=rows[0];
+            sbGet("pedido_lineas","pedido_id=eq."+pedido.id+"&order=id.asc").then(function(lineas){
+              var cli=clients.find(function(c){return c.id===pedido.cliente_id;});
+              var logoUrl=LINEA_LOGO[pedido.linea_negocio]||LINEA_LOGO["La Sin Gluten"];
+              var lang=window.confirm("¿Imprimir en inglés? (Cancelar = Castellano)")?"en":"es";
+              sbGet("listas_precio","id=eq."+(pedido.lista_id||0)).then(function(lsts){
+                var lista=lsts[0]||null;
+                var pedidoConDatos=Object.assign({},pedido,{_condiciones_lista:lista?lista.condiciones:null,_lista_nombre:lista?lista.nombre:null});
+                generarPDF(pedidoConDatos,lineas,cli,currentUser,logoUrl,lang);
+              }).catch(function(){generarPDF(pedido,lineas,cli,currentUser,logoUrl,"es");});
+            });
+          }).catch(function(e){alert("Error: "+e.message);});
+        }}
+      />
       {!clientPanel&&!showImportCli&&<div>
         <div style={{marginBottom:12}}>
           <div style={{position:"relative"}}>
@@ -1143,7 +2135,7 @@ function CRM() {
       </div>}
     </div>;
   }
-
+ 
   function TabActividades(){
     var actsFilt=activitiesFiltLinea.filter(function(a){return(!actFiltro.gestor||a.gestor===actFiltro.gestor)&&(!actFiltro.estado||a.estado===actFiltro.estado)&&(!actFiltro.tipo||a.tipo===actFiltro.tipo);});
     return <div>
@@ -1175,7 +2167,7 @@ function CRM() {
       {actsFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",marginTop:24,fontSize:13}}>Sin actividades.</div>}
     </div>;
   }
-
+ 
   function TabVentas(){
     var totalVenta=ventasFilt.reduce(function(s,v){return s+(v.venta_neta||0);},0);
     var totalUds=ventasFilt.reduce(function(s,v){return s+(v.unidades||0);},0);
@@ -1223,7 +2215,7 @@ function CRM() {
       </div>}
     </div>;
   }
-
+ 
   function TabInformes(){
     var [rptFilter,setRptFilter]=useState({canal:"",grupo:"",gestor:"",fechaDesde:"",fechaHasta:"",estado:""});
     var fc=clientsFiltLinea.filter(function(c){return(!rptFilter.canal||c.canal===rptFilter.canal)&&(!rptFilter.grupo||c.grupo===rptFilter.grupo)&&(!rptFilter.gestor||c.gestor===rptFilter.gestor);});
@@ -1273,7 +2265,7 @@ function CRM() {
       </div>
     </div>;
   }
-
+ 
   function TabConfiguracion(){
     var sections=[["Canales","canal","canales","#7f77dd"],["Grupos gestores","grupo","grupos","#1d9e75"],["Gestores","gestor","gestores","#378add"]];
     return <div>
@@ -1296,9 +2288,11 @@ function CRM() {
           </div>
         </div>;
       })}
+      <Sep label="📦 Productos y listas de precio" />
+      <ProductosManager linColor={linColor} lineaActiva={lineaActiva} currentUser={currentUser} />
     </div>;
   }
-
+ 
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"1.5rem",padding:"1rem 1.25rem",borderRadius:12,background:linGrad}}>
@@ -1338,13 +2332,14 @@ function CRM() {
         {tab==="Clientes"      &&<TabClientes />}
         {tab==="Actividades"   &&<TabActividades />}
         {tab==="Ventas"        &&<TabVentas />}
+        {tab==="Pedidos"       &&<TabPedidos clients={clients} config={config} currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
         {tab==="Informes"      &&<TabInformes />}
         {tab==="Configuración" &&<TabConfiguracion />}
       </div>}
     </div>
   );
 }
-
+ 
 ReactDOM.createRoot(document.getElementById("root")).render(<CRM />);
 </script>
 </body>
