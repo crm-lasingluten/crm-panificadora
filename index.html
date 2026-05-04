@@ -60,7 +60,7 @@ const PRIO_C = { Alta:"#e24b4a", Media:"#ba7517", Baja:"#1d9e75" };
 const EST_C  = { Pendiente:"#378add", "En curso":"#ba7517", Completada:"#1d9e75" };
 const TIPO_C = { Llamada:"#7f77dd", Email:"#378add", Reunión:"#1d9e75", Visita:"#e24b4a", WhatsApp:"#25d366", Nota:"#888780", Muestras:"#f59e0b" };
 const IVA_TIPOS      = [{"label":"21%","value":21},{"label":"10%","value":10},{"label":"4%","value":4}];
-const UNIDADES_MEDIDA = ["Unidad","Caja","Saco","Pallet"];
+const UNIDADES_MEDIDA = ["Unidad","Caja","Saco","Pallet","Kilos"];
 const DOC_TIPOS  = ["pedido","proforma","presupuesto"];
 const DOC_LABELS = {pedido:"Pedido", proforma:"Proforma", presupuesto:"Presupuesto"};
 const DOC_COLORS = {pedido:"#378add", proforma:"#7f77dd", presupuesto:"#1d9e75"};
@@ -225,41 +225,56 @@ function Login(props) {
   var [error,setError]=useState("");
   var [loading,setLoading]=useState(false);
   var [usuarios,setUsuarios]=useState([]);
-  useEffect(function(){sbGet("usuarios","select=nombre&order=nombre.asc").then(function(r){setUsuarios(r.map(function(x){return x.nombre;}));}).catch(function(){});;},[]);
+  var [recordar,setRecordar]=useState(false);
+
+  useEffect(function(){
+    sbGet("usuarios","select=nombre&order=nombre.asc").then(function(r){setUsuarios(r.map(function(x){return x.nombre;}));}).catch(function(){});
+    try{
+      var saved=localStorage.getItem("crm_remember");
+      if(saved){var d=JSON.parse(saved);setGestor(d.g||"");setPass(d.p||"");setRecordar(true);}
+    }catch(e){}
+  },[]);
+
   function handleLogin(){
     if(!gestor){setError("Selecciona tu nombre");return;}
-    if(!pass){setError("Ingresa tu contraseña");return;}
+    if(!pass){setError("Ingresa tu contrasena");return;}
     setLoading(true);
     sbGet("usuarios","nombre=eq."+encodeURIComponent(gestor)+"&select=nombre,password,admin,linea_negocio").then(function(rows){
-      if(!rows.length||rows[0].password!==pass){setError("Contraseña incorrecta");setLoading(false);return;}
+      if(!rows.length||rows[0].password!==pass){setError("Contrasena incorrecta");setLoading(false);return;}
       var lineas=(rows[0].linea_negocio||"La Sin Gluten").split("|");
       var u={nombre:rows[0].nombre,admin:rows[0].admin,lineas:lineas,lineaActiva:lineas[0]};
-      sessionStorage.setItem("crm_session",JSON.stringify(u));
+      localStorage.setItem("crm_session",JSON.stringify(u));
+      if(recordar){localStorage.setItem("crm_remember",JSON.stringify({g:gestor,p:pass}));}
+      else{localStorage.removeItem("crm_remember");}
       props.onLogin(u);
-    }).catch(function(){setError("Error de conexión");setLoading(false);});
+    }).catch(function(){setError("Error de conexion");setLoading(false);});
   }
   return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#8ecfd4,#5bb5bc)"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:"2.5rem 2rem",width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.15)",animation:"slideIn 0.3s ease"}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#f0f4ff 0%,#e8f5e9 100%)"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:"2.5rem 2rem",width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.1)"}}>
         <div style={{textAlign:"center",marginBottom:"2rem"}}>
-          <div style={{width:90,height:90,borderRadius:"50%",overflow:"hidden",margin:"0 auto 1rem",border:"3px solid #8ecfd4"}}>
+          <div style={{width:90,height:90,borderRadius:"50%",overflow:"hidden",margin:"0 auto 1rem",border:"3px solid #86efac"}}>
             <img src="https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png" alt="Logo" style={{width:"100%",height:"100%",objectFit:"cover"}} />
           </div>
           <div style={{fontSize:18,fontWeight:700}}>CRM Panificadora</div>
-          <div style={{fontSize:13,color:"#888",marginTop:4}}>La Sin Gluten · Bauer Lemans</div>
+          <div style={{fontSize:13,color:"#888",marginTop:4}}>La Sin Gluten - Bauer Lemans</div>
         </div>
         <div style={{marginBottom:12}}>
           <div style={{fontSize:12,color:"#666",marginBottom:4}}>Tu nombre</div>
           <Sel value={gestor} onChange={function(v){setGestor(v);setError("");}} options={usuarios} placeholder="Selecciona tu nombre" />
         </div>
-        <div style={{marginBottom:16}}>
-          <div style={{fontSize:12,color:"#666",marginBottom:4}}>Contraseña</div>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:12,color:"#666",marginBottom:4}}>Contrasena</div>
           <input type="password" value={pass} onChange={function(e){setPass(e.target.value);setError("");}}
-            onKeyDown={function(e){if(e.key==="Enter")handleLogin();}} placeholder="Tu contraseña"
+            onKeyDown={function(e){if(e.key==="Enter")handleLogin();}} placeholder="Tu contrasena"
             style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%"}} />
         </div>
+        <div style={{marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+          <input type="checkbox" id="chkRec" checked={recordar} onChange={function(e){setRecordar(e.target.checked);}} style={{cursor:"pointer"}} />
+          <label htmlFor="chkRec" style={{fontSize:12,color:"#666",cursor:"pointer"}}>Recordar usuario y contrasena</label>
+        </div>
         {error&&<div style={{fontSize:12,color:"#e24b4a",marginBottom:12,textAlign:"center"}}>{error}</div>}
-        <Btn variant="primary" onClick={handleLogin} disabled={loading} style={{width:"100%",padding:"10px",fontSize:14}}>{loading?"Verificando…":"Entrar"}</Btn>
+        <Btn variant="primary" onClick={handleLogin} disabled={loading} style={{width:"100%",padding:"10px",fontSize:14}}>{loading?"Verificando...":"Ingresar"}</Btn>
       </div>
     </div>
   );
@@ -972,7 +987,7 @@ function ProductosManager(props){
   function delProd(id){if(!confirm("Eliminar producto?"))return;sbDel("productos",id).then(reload);}
   function saveLista(f){
     setSaving(true);
-    var body={nombre:f.nombre,linea_negocio:f.linea_negocio||lineaFiltro,activo:true,condiciones:f.condiciones||null};
+    var body={nombre:f.nombre,linea_negocio:f.linea_negocio||lineaFiltro,activo:true,condiciones:f.condiciones||null,condiciones_en:f.condiciones_en||null};
     var p=f.id?sbPatch("listas_precio",f.id,body):sbPost("listas_precio",body);
     p.then(function(){reload();setEditLista(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
@@ -988,7 +1003,7 @@ function ProductosManager(props){
   var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaFiltro;});
   var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaFiltro;});
   var emptyP={codigo:"",nombre:"",descripcion:"",unidad_medida:"Unidad",linea_negocio:lineaFiltro,activo:true,presentacion:"",sacos_por_pallet:"",unidades_por_caja:"",unidades_por_pallet:"",caducidad_meses:"",iva_producto:21};
-  var emptyL={nombre:"",linea_negocio:lineaFiltro,activo:true,condiciones:""};
+  var emptyL={nombre:"",linea_negocio:lineaFiltro,activo:true,condiciones:"",condiciones_en:""};
 
   return <div>
     {lineasVis.length>1&&<div style={{display:"flex",gap:4,background:"#f5f5f5",borderRadius:20,padding:3,marginBottom:12,width:"fit-content"}}>
@@ -1083,8 +1098,11 @@ function ProductosManager(props){
             </select>
           </FL>
         </FRow>
-        <FL label="Condiciones comerciales (aparece en Presupuesto)">
+        <FL label="Condiciones comerciales - ES (aparece en Presupuesto)">
           <Textarea value={editLista.condiciones||""} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{condiciones:v});});}} rows={3} placeholder="Pago 30 dias, portes incluidos a partir de 500 EUR..." />
+        </FL>
+        <FL label="Condiciones comerciales - EN (para formato en ingles)">
+          <Textarea value={editLista.condiciones_en||""} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{condiciones_en:v});});}} rows={3} placeholder="Payment 30 days, shipping included from 500 EUR..." />
         </FL>
         <div style={{display:"flex",gap:8,marginTop:8}}>
           <Btn variant="primary" onClick={function(){saveLista(editLista);}} disabled={saving||!editLista.nombre}>{saving?"Guardando...":"Guardar"}</Btn>
@@ -1427,7 +1445,11 @@ function generarPDF(pedido,lineas,logoUrl,lang){
   }
 
   var condHTML="";
-  if(esPresupuesto&&pedido._condiciones_lista){condHTML="<div class=cond><b>"+tr.condiciones+"</b><p>"+pedido._condiciones_lista+"</p></div>";}
+  if(esPresupuesto&&pedido._condiciones_lista){
+    var condText=pedido._condiciones_lista;
+    if(lang==="en"&&pedido._condiciones_en){condText=pedido._condiciones_en;}
+    condHTML="<div class=cond><b>"+tr.condiciones+"</b><p>"+condText+"</p></div>";
+  }
 
   var css="body{font-family:Arial,sans-serif;font-size:12px;padding:28px}.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:3px solid "+linColor+"}.logo{width:80px;height:80px;object-fit:contain}.emp{flex:1;margin-left:14px}.emp h2{font-size:14px;color:"+linColor+";margin-bottom:4px}.emp p{font-size:10px;color:#555;line-height:1.6}.dtt{text-align:right;min-width:160px}.dtt h1{font-size:26px;font-weight:900;color:"+linColor+";letter-spacing:2px}.dtt .num{font-size:14px;font-weight:700;margin-top:4px}.dtt p{font-size:10px;color:#666;margin-top:3px}.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}.box{background:#f8f8f8;border-radius:6px;padding:10px 14px;border:1px solid #eee}.box h3{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#888;margin-bottom:5px}.box div{font-size:11px;line-height:1.7}table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11px}thead tr{background:"+linColor+";color:#fff}th{padding:8px 9px;text-align:left;font-size:10px;font-weight:700}td{padding:7px 9px;border-bottom:1px solid #f0f0f0}td.m{font-family:monospace;font-size:10px;color:"+linColor+";font-weight:600}tr:nth-child(even) td{background:#fafafa}.tots{display:flex;justify-content:flex-end;margin-top:6px}.tbox{width:240px;border:1px solid #eee;border-radius:8px;padding:12px 16px;background:#fafafa}.tr2{display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px}.sep{border-top:1px solid #ddd;padding-top:5px;margin-top:4px}.tot{font-size:14px;font-weight:700;border-top:2px solid "+linColor+";padding-top:6px;margin-top:5px;color:"+linColor+"}.entrega{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:9px 13px;margin-bottom:12px}.entrega h3{font-size:9px;text-transform:uppercase;color:#1d9e75;margin-bottom:3px}.obs{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:10px}.cond{background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 14px;margin-top:14px;font-size:11px}.cond b{font-size:9px;text-transform:uppercase;color:#1e40af;display:block;margin-bottom:4px}.footer{margin-top:20px;padding-top:10px;border-top:1px solid #eee;font-size:9px;color:#aaa;text-align:center}";
 
@@ -1471,7 +1493,7 @@ function TabPedidos(props){
       var cli=clients.find(function(c){return c.id===pedido.cliente_id;})||null;
       var logo=LINEA_LOGO[pedido.linea_negocio]||LINEA_LOGO["La Sin Gluten"];
       var lista=listas.find(function(l){return l.id===pedido.lista_id;})||null;
-      var ped2=Object.assign({},pedido,{_cliente:cli,_condiciones_lista:lista?lista.condiciones:null,_lista_nombre:lista?lista.nombre:null});
+      var ped2=Object.assign({},pedido,{_cliente:cli,_condiciones_lista:lista?lista.condiciones:null,_condiciones_en:lista?lista.condiciones_en:null,_lista_nombre:lista?lista.nombre:null});
       generarPDF(ped2,lineas,logo,lang);
       sbPost("pdf_log",{pedido_id:pedido.id,cliente_id:pedido.cliente_id,tipo:pedido.tipo,numero:pedido.numero,generado_por:currentUser.nombre,linea_negocio:pedido.linea_negocio}).catch(function(){});
     }).catch(function(e){alert("Error: "+e.message);});
@@ -1580,7 +1602,7 @@ function TabPedidos(props){
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
   var sesion=null;
-  try{var s=sessionStorage.getItem("crm_session");if(s)sesion=JSON.parse(s);}catch(e){}
+  try{var s=localStorage.getItem("crm_session");if(s)sesion=JSON.parse(s);}catch(e){}
 
   var [currentUser,setCurrentUser]=useState(sesion);
   var [lineaActiva,setLineaActiva]=useState(sesion?sesion.lineaActiva:"La Sin Gluten");
@@ -1637,8 +1659,8 @@ function CRM() {
     }
   },[currentUser,config.gestores.length]);
 
-  function handleLogin(u){sessionStorage.setItem("crm_session",JSON.stringify(u));setCurrentUser(u);setLineaActiva(u.lineaActiva);}
-  function handleLogout(){sessionStorage.removeItem("crm_session");setCurrentUser(null);}
+  function handleLogin(u){localStorage.setItem("crm_session",JSON.stringify(u));setCurrentUser(u);setLineaActiva(u.lineaActiva);}
+  function handleLogout(){localStorage.removeItem("crm_session");setCurrentUser(null);}
   function onRePrintFromClient(pdfRec){
     sbGet("pedidos","id=eq."+pdfRec.pedido_id).then(function(rows){
       if(!rows.length)return;
@@ -1649,7 +1671,7 @@ function CRM() {
         var lang=window.confirm("Imprimir en ingles? Aceptar=EN / Cancelar=ES")?"en":"es";
         sbGet("listas_precio","activo=eq.true").then(function(lsts){
           var lista=lsts.find(function(l){return l.id===pedido.lista_id;})||null;
-          var ped2=Object.assign({},pedido,{_condiciones_lista:lista?lista.condiciones:null,_lista_nombre:lista?lista.nombre:null});
+          var ped2=Object.assign({},pedido,{_condiciones_lista:lista?lista.condiciones:null,_condiciones_en:lista?lista.condiciones_en:null,_lista_nombre:lista?lista.nombre:null});
           generarPDF(ped2,lineas,cli,logo,lang);
         }).catch(function(){generarPDF(pedido,lineas,cli,logo,"es");});
       });
@@ -1658,7 +1680,7 @@ function CRM() {
   function cambiarLinea(l){
     setLineaActiva(l);
     var u=Object.assign({},currentUser,{lineaActiva:l});
-    setCurrentUser(u);sessionStorage.setItem("crm_session",JSON.stringify(u));
+    setCurrentUser(u);localStorage.setItem("crm_session",JSON.stringify(u));
     setDetalleId(null);setClientPanel(null);setActPanel(null);setBusqueda("");setPagina(1);
   }
 
