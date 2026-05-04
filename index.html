@@ -1432,7 +1432,7 @@ function generarPDF(pedido,lineas,logoUrl,lang){
   var thead="",tbody="";
   if(esPresupuesto){
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.presentacion+"</th><th>"+tr.uds_caja+"</th><th>"+tr.uds_pallet+"</th><th>"+tr.caducidad+"</th><th>"+tr.iva_pct+"</th><th>"+tr.precio+"</th></tr>";
-    tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.presentacion||l.unidad||"")+"</td><td>"+(l.unidades_por_caja||"")+"</td><td>"+(l.unidades_por_pallet||"")+"</td><td>"+iv+"%</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td></tr>";}).join("");
+    tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.presentacion||l.unidad||"")+"</td><td>"+(l.unidades_por_caja||"")+"</td><td>"+(l.unidades_por_pallet||"")+"</td><td>"+(l.caducidad_meses||"--")+"</td><td>"+iv+"%</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td></tr>";}).join("");
   } else if(esProforma){
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.unidad+"</th><th>"+tr.cantidad+"</th><th>"+tr.lote+"</th><th>"+tr.cad_prod+"</th><th>"+tr.precio+"</th><th>"+tr.base+"</th><th>"+tr.iva_pct+"</th><th>"+tr.total_iva+"</th></tr>";
     tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.unidad||"Unidad")+"</td><td>"+l.cantidad+"</td><td>"+(l.lote||"--")+"</td><td>"+(l.caducidad||"--")+"</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td><td>"+parseFloat(l.subtotal||0).toFixed(2)+"</td><td>"+iv+"%</td><td>"+parseFloat(l.total_linea||0).toFixed(2)+"</td></tr>";}).join("");
