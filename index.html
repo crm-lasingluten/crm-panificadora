@@ -41,6 +41,7 @@ const HDR = { "Content-Type": "application/json", "apikey": SB_KEY, "Authorizati
 const EJS_SVC = "service_23nxndb", EJS_TPL = "template_j38orxq", EJS_KEY = "58oEGgupwIjO040e6";
 
 const LINEAS = ["La Sin Gluten", "Bauer Lemans"];
+const BAUER_MARCAS = ["Bocado Functional Foods","Rietmann Iberica"];
 const LINEA_COLOR = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
 const LINEA_GRAD  = { "La Sin Gluten": "linear-gradient(135deg,#8ecfd4,#5bb5bc)", "Bauer Lemans": "linear-gradient(135deg,#c0392b,#922b21)" };
 const LINEA_LOGO  = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
@@ -961,6 +962,7 @@ function ProductosManager(props){
   var [saving,setSaving]=useState(false);
   var lineasVis=currentUser&&currentUser.lineas?currentUser.lineas:LINEAS;
   var [lineaFiltro,setLineaFiltro]=useState(lineaActiva);
+  var [marcaFiltro,setMarcaFiltro]=useState("");
 
   function reload(){
     Promise.all([
@@ -980,14 +982,14 @@ function ProductosManager(props){
       unidades_por_caja:f.unidades_por_caja?parseFloat(f.unidades_por_caja):null,
       unidades_por_pallet:f.unidades_por_pallet?parseFloat(f.unidades_por_pallet):null,
       caducidad_meses:f.caducidad_meses?parseInt(f.caducidad_meses):null,
-      iva_producto:parseFloat(f.iva_producto||21)};
+      iva_producto:parseFloat(f.iva_producto||21),marca:f.marca||null};
     var p=f.id?sbPatch("productos",f.id,body):sbPost("productos",body);
     p.then(function(){reload();setEditProd(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
   function delProd(id){if(!confirm("Eliminar producto?"))return;sbDel("productos",id).then(reload);}
   function saveLista(f){
     setSaving(true);
-    var body={nombre:f.nombre,linea_negocio:f.linea_negocio||lineaFiltro,activo:true,condiciones:f.condiciones||null,condiciones_en:f.condiciones_en||null};
+    var body={nombre:f.nombre,linea_negocio:f.linea_negocio||lineaFiltro,activo:true,condiciones:f.condiciones||null,condiciones_en:f.condiciones_en||null,marca:f.marca||null};
     var p=f.id?sbPatch("listas_precio",f.id,body):sbPost("listas_precio",body);
     p.then(function(){reload();setEditLista(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
@@ -1000,14 +1002,18 @@ function ProductosManager(props){
   }
   function getPrecio(pId,lId){var p=precios.find(function(x){return x.producto_id===pId&&x.lista_id===lId;});return p?p.precio:"";}
 
-  var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaFiltro;});
-  var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaFiltro;});
-  var emptyP={codigo:"",nombre:"",descripcion:"",unidad_medida:"Unidad",linea_negocio:lineaFiltro,activo:true,presentacion:"",sacos_por_pallet:"",unidades_por_caja:"",unidades_por_pallet:"",caducidad_meses:"",iva_producto:21};
-  var emptyL={nombre:"",linea_negocio:lineaFiltro,activo:true,condiciones:"",condiciones_en:""};
+  var prodFilt=productos.filter(function(p){return p.linea_negocio===lineaFiltro&&(!marcaFiltro||p.marca===marcaFiltro);});
+  var listasFilt=listas.filter(function(l){return l.linea_negocio===lineaFiltro&&(!marcaFiltro||l.marca===marcaFiltro);});
+  var emptyP={codigo:"",nombre:"",descripcion:"",unidad_medida:"Unidad",linea_negocio:lineaFiltro,marca:marcaFiltro||"",activo:true,presentacion:"",sacos_por_pallet:"",unidades_por_caja:"",unidades_por_pallet:"",caducidad_meses:"",iva_producto:21};
+  var emptyL={nombre:"",linea_negocio:lineaFiltro,marca:marcaFiltro||"",activo:true,condiciones:"",condiciones_en:""};
 
   return <div>
     {lineasVis.length>1&&<div style={{display:"flex",gap:4,background:"#f5f5f5",borderRadius:20,padding:3,marginBottom:12,width:"fit-content"}}>
       {lineasVis.map(function(l){return <button key={l} onClick={function(){setLineaFiltro(l);}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:lineaFiltro===l?(LINEA_COLOR[l]||linColor):"transparent",color:lineaFiltro===l?"#fff":"#666"}}>{l}</button>;})}
+    </div>}
+    {lineaFiltro==="Bauer Lemans"&&<div style={{display:"flex",gap:4,background:"#fff3e0",borderRadius:20,padding:3,marginBottom:12,width:"fit-content",border:"1px solid #ffe0b2"}}>
+      <button onClick={function(){setMarcaFiltro("");}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:!marcaFiltro?"#f59e0b":"transparent",color:!marcaFiltro?"#fff":"#888"}}>Todas</button>
+      {BAUER_MARCAS.map(function(mc){return <button key={mc} onClick={function(){setMarcaFiltro(mc);}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:marcaFiltro===mc?"#f59e0b":"transparent",color:marcaFiltro===mc?"#fff":"#666"}}>{mc}</button>;})}
     </div>}
     <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"1px solid #eee"}}>
       {[["productos","Productos"],["listas","Listas de precio"],["tabla","Tabla de precios"]].map(function(item){
@@ -1026,10 +1032,16 @@ function ProductosManager(props){
           <FL label="Codigo *" flex={1}><Inp value={editProd.codigo} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{codigo:v});});}} placeholder="PROD001" /></FL>
           <FL label="Nombre *" flex={3}><Inp value={editProd.nombre} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Nombre del producto" /></FL>
           <FL label="Linea" flex={1}>
-            <select value={editProd.linea_negocio} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{linea_negocio:e.target.value});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+            <select value={editProd.linea_negocio} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{linea_negocio:e.target.value,marca:""});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
               {lineasVis.map(function(l){return <option key={l} value={l}>{l}</option>;})}
             </select>
           </FL>
+          {editProd.linea_negocio==="Bauer Lemans"&&<FL label="Marca" flex={1}>
+            <select value={editProd.marca||""} onChange={function(e){setEditProd(function(f){return Object.assign({},f,{marca:e.target.value});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              <option value="">-- Sin marca --</option>
+              {BAUER_MARCAS.map(function(mc){return <option key={mc} value={mc}>{mc}</option>;})}
+            </select>
+          </FL>}
         </FRow>
         <FRow>
           <FL label="Presentacion" flex={2}><Inp value={editProd.presentacion||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{presentacion:v});});}} placeholder="Ej: 500g, 1 Kg..." /></FL>
@@ -1093,10 +1105,16 @@ function ProductosManager(props){
         <FRow>
           <FL label="Nombre de la lista" flex={2}><Inp value={editLista.nombre} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Tarifa General, Canal Farmacia..." /></FL>
           <FL label="Linea" flex={1}>
-            <select value={editLista.linea_negocio} onChange={function(e){setEditLista(function(f){return Object.assign({},f,{linea_negocio:e.target.value});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+            <select value={editLista.linea_negocio} onChange={function(e){setEditLista(function(f){return Object.assign({},f,{linea_negocio:e.target.value,marca:""});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
               {lineasVis.map(function(l){return <option key={l} value={l}>{l}</option>;})}
             </select>
           </FL>
+          {editLista.linea_negocio==="Bauer Lemans"&&<FL label="Marca" flex={1}>
+            <select value={editLista.marca||""} onChange={function(e){setEditLista(function(f){return Object.assign({},f,{marca:e.target.value});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+              <option value="">-- Sin marca --</option>
+              {BAUER_MARCAS.map(function(mc){return <option key={mc} value={mc}>{mc}</option>;})}
+            </select>
+          </FL>}
         </FRow>
         <FL label="Condiciones comerciales - ES (aparece en Presupuesto)">
           <Textarea value={editLista.condiciones||""} onChange={function(v){setEditLista(function(f){return Object.assign({},f,{condiciones:v});});}} rows={3} placeholder="Pago 30 dias, portes incluidos a partir de 500 EUR..." />
@@ -1160,6 +1178,7 @@ function PedidoEditor(props){
   var [busqCli,setBusqCli]=useState("");
   var [showDrop,setShowDrop]=useState(false);
   var [busqProd,setBusqProd]=useState("");
+  var [marcaDoc,setMarcaDoc]=useState("");
   var initForm={tipo:"pedido",cliente_id:"",lista_id:"",fecha:tod(),fecha_entrega:"",direccion_entrega:"",observaciones:"",gestor:currentUser.nombre,linea_negocio:lineaActiva};
   var [form,setForm]=useState(initial?Object.assign({},initForm,initial):initForm);
   var [lineas,setLineas]=useState(initial&&initial._lineas?initial._lineas:[]);
@@ -1236,12 +1255,13 @@ function PedidoEditor(props){
   },[clients,lineaActiva,busqCli]);
 
   var cliSel=clients.find(function(c){return c.id===parseInt(form.cliente_id);});
+  var listasFiltDoc=lineaActiva==="Bauer Lemans"?listas.filter(function(l){return !marcaDoc||l.marca===marcaDoc;}):listas;
   var listaSel=listas.find(function(l){return l.id===parseInt(form.lista_id);});
 
   var prodsFilt=useMemo(function(){
     var q=norm(busqProd);
-    return productos.filter(function(p){return !q||norm(p.nombre).indexOf(q)>=0||norm(p.codigo||"").indexOf(q)>=0;});
-  },[productos,busqProd]);
+    return productos.filter(function(p){return (!marcaDoc||p.marca===marcaDoc)&&(!q||norm(p.nombre).indexOf(q)>=0||norm(p.codigo||"").indexOf(q)>=0);});
+  },[productos,busqProd,marcaDoc]);
 
   function handleSave(){
     if(!form.cliente_id||!lineas.length){alert("Selecciona un cliente y agrega al menos un producto.");return;}
@@ -1286,6 +1306,10 @@ function PedidoEditor(props){
       </div>
       <button onClick={onCancel} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"#888"}}>X</button>
     </div>
+    {lineaActiva==="Bauer Lemans"&&<div style={{display:"flex",gap:4,background:"#fff3e0",borderRadius:20,padding:3,marginBottom:12,width:"fit-content",border:"1px solid #ffe0b2"}}>
+      <button onClick={function(){setMarcaDoc("");}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:!marcaDoc?"#f59e0b":"transparent",color:!marcaDoc?"#fff":"#888"}}>Todas las marcas</button>
+      {BAUER_MARCAS.map(function(mc){return <button key={mc} onClick={function(){setMarcaDoc(mc);}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:marcaDoc===mc?"#f59e0b":"transparent",color:marcaDoc===mc?"#fff":"#666"}}>{mc}</button>;})}
+    </div>}
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
       <div>
@@ -1319,7 +1343,7 @@ function PedidoEditor(props){
         <FL label="Lista de precio">
           <select value={form.lista_id} onChange={function(e){changeList(e.target.value);}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
             <option value="">-- Sin lista --</option>
-            {listas.map(function(l){return <option key={l.id} value={l.id}>{l.nombre}</option>;})}
+            {listasFiltDoc.map(function(l){return <option key={l.id} value={l.id}>{l.nombre}</option>;})}
           </select>
         </FL>
         <FL label="Gestor">
