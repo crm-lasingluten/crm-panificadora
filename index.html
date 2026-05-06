@@ -72,7 +72,7 @@ const T = {
     cliente:"Cliente", fecha:"Fecha", entrega:"Entrega prevista", gestor:"Gestor",
     codigo:"Codigo", producto:"Producto", unidad:"Unidad", cantidad:"Cantidad",
     precio:"Precio unit.", base:"Base", iva_pct:"IVA%", total_iva:"Total c/IVA",
-    presentacion:"Presentacion", uds_caja:"Uds por Caja/Saco", uds_pallet:"Uds/Pallet", caducidad:"Caducidad (meses)", lote:"Lote", cad_prod:"Caducidad",
+    presentacion:"Presentacion", uds_caja:"Uds por Caja/Saco", uds_pallet:"Uds/Pallet", caducidad:"Caducidad", lote:"Lote", cad_prod:"Caducidad",
     base_imp:"Base imponible", total_iva_r:"Total IVA", total:"TOTAL",
     sin_valorizar:"Pedido sin valorizar", observaciones:"Observaciones",
     dir_entrega:"Direccion de entrega", resumen:"Resumen fiscal",
@@ -85,7 +85,7 @@ const T = {
     cliente:"Customer", fecha:"Date", entrega:"Delivery date", gestor:"Sales rep",
     codigo:"Code", producto:"Product", unidad:"Unit", cantidad:"Qty",
     precio:"Unit price", base:"Net", iva_pct:"VAT%", total_iva:"Total incl. VAT",
-    presentacion:"Presentation", uds_caja:"Units per Box/Bag", uds_pallet:"Units/Pallet", caducidad:"Expiry (months)", lote:"Batch", cad_prod:"Expiry",
+    presentacion:"Presentation", uds_caja:"Units per Box/Bag", uds_pallet:"Units/Pallet", caducidad:"Expiry", lote:"Batch", cad_prod:"Expiry",
     base_imp:"Net amount", total_iva_r:"Total VAT", total:"TOTAL",
     sin_valorizar:"Order (no pricing)", observaciones:"Notes",
     dir_entrega:"Delivery address", resumen:"Tax summary",
@@ -1180,7 +1180,7 @@ function ProductosManager(props){
           <FL label="Uds por caja" flex={1}><Inp type="number" value={editProd.unidades_por_caja||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidades_por_caja:v});});}} placeholder="0" /></FL>
           <FL label="Sacos por pallet" flex={1}><Inp type="number" value={editProd.sacos_por_pallet||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{sacos_por_pallet:v});});}} placeholder="0" /></FL>
           <FL label="Uds por pallet" flex={1}><Inp type="number" value={editProd.unidades_por_pallet||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{unidades_por_pallet:v});});}} placeholder="0" /></FL>
-          <FL label="Caducidad (meses)" flex={1}><Inp type="number" value={editProd.caducidad_meses||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{caducidad_meses:v});});}} placeholder="0" /></FL>
+          <FL label="Caducidad" flex={1}><Inp value={editProd.caducidad_meses||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{caducidad_meses:v});});}} placeholder="Ej: 12 meses, 30 dias" /></FL>
         </FRow>
         <FRow><FL label="Descripcion"><Inp value={editProd.descripcion||""} onChange={function(v){setEditProd(function(f){return Object.assign({},f,{descripcion:v});});}} placeholder="Descripcion opcional" /></FL></FRow>
         <div style={{display:"flex",gap:8}}>
@@ -1267,14 +1267,14 @@ function ProductosManager(props){
         :<div style={{overflowX:"auto"}}>
           <table style={{borderCollapse:"collapse",fontSize:12,background:"#fff",borderRadius:10,minWidth:400}}>
             <thead style={{background:"#f9f9f9"}}><tr>
-              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee"}}>Producto</th>
-              <th style={{padding:"8px 12px",fontWeight:600,color:"#888",borderBottom:"1px solid #eee",fontSize:11}}>Unidad</th>
+              <th style={{padding:"8px 12px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee",position:"sticky",left:0,background:"#f9f9f9",zIndex:2,minWidth:160}}>Producto</th>
+              <th style={{padding:"8px 12px",fontWeight:600,color:"#888",borderBottom:"1px solid #eee",fontSize:11,position:"sticky",left:160,background:"#f9f9f9",zIndex:2}}>Unidad</th>
               {listasFilt.map(function(l){return <th key={l.id} style={{padding:"8px 12px",textAlign:"center",fontWeight:600,color:linColor,borderBottom:"1px solid #eee",whiteSpace:"nowrap",minWidth:110}}>{l.nombre}</th>;})}
             </tr></thead>
             <tbody>{prodFilt.map(function(p){
               return <tr key={p.id} style={{borderBottom:"1px solid #f5f5f5"}}>
-                <td style={{padding:"7px 12px",fontWeight:500}}>{p.nombre}{p.presentacion&&<span style={{marginLeft:6,fontSize:11,color:"#aaa"}}>{p.presentacion}</span>}</td>
-                <td style={{padding:"7px 12px"}}><Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} /></td>
+                <td style={{padding:"7px 12px",fontWeight:500,position:"sticky",left:0,background:"#fff",zIndex:1,boxShadow:"2px 0 4px rgba(0,0,0,0.05)"}}>{p.nombre}{p.presentacion&&<span style={{marginLeft:6,fontSize:11,color:"#aaa"}}>{p.presentacion}</span>}</td>
+                <td style={{padding:"7px 12px",position:"sticky",left:160,background:"#fff",zIndex:1}}><Badge color="#7f77dd" label={p.unidad_medida||"Unidad"} /></td>
                 {listasFilt.map(function(l){
                   var val=getPrecio(p.id,l.id);
                   return <td key={l.id} style={{padding:"4px 8px",textAlign:"center"}}>
@@ -1333,7 +1333,7 @@ function PedidoEditor(props){
     var precio=getP(prod.id,form.lista_id);
     var iva=parseFloat(prod.iva_producto||21);
     var sub=precio;
-    setLineas(function(prev){return prev.concat([{producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,unidad_medida:prod.unidad_medida||"Unidad",presentacion:prod.presentacion||"",unidades_por_caja:prod.unidades_por_caja||"",unidades_por_pallet:prod.unidades_por_pallet||"",caducidad_meses:prod.caducidad_meses||"",cantidad:1,precio:precio,iva:iva,subtotal:sub,iva_importe:sub*iva/100,total_linea:sub*(1+iva/100),lote:"",caducidad:prod.caducidad_meses?String(prod.caducidad_meses)+" meses":""}]);});
+    setLineas(function(prev){return prev.concat([{producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,unidad_medida:prod.unidad_medida||"Unidad",presentacion:prod.presentacion||"",unidades_por_caja:prod.unidades_por_caja||"",unidades_por_pallet:prod.unidades_por_pallet||"",caducidad_meses:prod.caducidad_meses||"",cantidad:1,precio:precio,iva:iva,subtotal:sub,iva_importe:sub*iva/100,total_linea:sub*(1+iva/100),lote:"",caducidad:prod.caducidad_meses||""}]);});
   }
 
   function updLinea(idx,k,v){
@@ -1404,7 +1404,7 @@ function PedidoEditor(props){
           var idx=0;
           var conPrecio=(form.tipo==="proforma"||form.tipo==="presupuesto");
           function nextL(){
-            if(idx>=lineas.length)return Promise.resolve({id:pedidoId,numero:numero});
+            if(idx>=lineas.length)return Promise.resolve({id:pedidoId,numero:numero,cliente_id:parseInt(form.cliente_id),tipo:form.tipo,linea_negocio:lineaActiva,_isNew:!form.id});
             var l=lineas[idx++];
             return sbPost("pedido_lineas",{pedido_id:pedidoId,producto_id:l.producto_id,codigo:l.codigo,nombre:l.nombre,unidad:l.unidad_medida,cantidad:l.cantidad,precio:conPrecio?l.precio:0,subtotal:conPrecio?l.subtotal:0,iva_linea:l.iva,iva_importe:conPrecio?l.iva_importe:0,total_linea:conPrecio?l.total_linea:0,presentacion:l.presentacion||null,unidades_por_caja:l.unidades_por_caja||null,unidades_por_pallet:l.unidades_por_pallet||null,lote:l.lote||null,caducidad:l.caducidad||null}).then(nextL);
           }
@@ -1635,7 +1635,12 @@ function TabPedidos(props){
   var [filtroEstado,setFiltroEstado]=useState("");
   var [modalPed,setModalPed]=useState(null);
 
-  function handleSaved(){reload();setView("lista");}
+  function handleSaved(result){
+    reload();setView("lista");
+    if(result&&result.id&&result._isNew){
+      sbPost("pdf_log",{pedido_id:result.id,cliente_id:result.cliente_id,tipo:result.tipo,numero:result.numero,generado_por:currentUser.nombre,linea_negocio:result.linea_negocio}).catch(function(){});
+    }
+  }
 
   function abrirPDF(pedido){setModalPed(pedido);}
 
@@ -1646,7 +1651,6 @@ function TabPedidos(props){
       var lista=listas.find(function(l){return l.id===pedido.lista_id;})||null;
       var ped2=Object.assign({},pedido,{_cliente:cli,_condiciones_lista:lista?lista.condiciones:null,_condiciones_en:lista?lista.condiciones_en:null,_lista_nombre:lista?lista.nombre:null});
       generarPDF(ped2,lineas,logo,lang);
-      sbPost("pdf_log",{pedido_id:pedido.id,cliente_id:pedido.cliente_id,tipo:pedido.tipo,numero:pedido.numero,generado_por:currentUser.nombre,linea_negocio:pedido.linea_negocio}).catch(function(){});
     }).catch(function(e){alert("Error: "+e.message);});
   }
 
@@ -1824,8 +1828,9 @@ function CRM() {
         sbGet("listas_precio","activo=eq.true").then(function(lsts){
           var lista=lsts.find(function(l){return l.id===pedido.lista_id;})||null;
           var ped2=Object.assign({},pedido,{_condiciones_lista:lista?lista.condiciones:null,_condiciones_en:lista?lista.condiciones_en:null,_lista_nombre:lista?lista.nombre:null});
-          generarPDF(ped2,lineas,cli,logo,lang);
-        }).catch(function(){generarPDF(pedido,lineas,cli,logo,"es");});
+          var ped3=Object.assign({},ped2,{_cliente:cli});
+          generarPDF(ped3,lineas,logo,lang);
+        }).catch(function(){var ped3=Object.assign({},pedido,{_cliente:cli});generarPDF(ped3,lineas,logo,"es");});
       });
     }).catch(function(e){alert("Error: "+e.message);});
   }
