@@ -1211,7 +1211,7 @@ function PedidoEditor(props){
     var precio=getP(prod.id,form.lista_id);
     var iva=parseFloat(prod.iva_producto||21);
     var sub=precio;
-    setLineas(function(prev){return prev.concat([{producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,unidad_medida:prod.unidad_medida||"Unidad",presentacion:prod.presentacion||"",unidades_por_caja:prod.unidades_por_caja||"",unidades_por_pallet:prod.unidades_por_pallet||"",caducidad_meses:prod.caducidad_meses||"",cantidad:1,precio:precio,iva:iva,subtotal:sub,iva_importe:sub*iva/100,total_linea:sub*(1+iva/100),lote:"",caducidad:""}]);});
+    setLineas(function(prev){return prev.concat([{producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,unidad_medida:prod.unidad_medida||"Unidad",presentacion:prod.presentacion||"",unidades_por_caja:prod.unidades_por_caja||"",unidades_por_pallet:prod.unidades_por_pallet||"",caducidad_meses:prod.caducidad_meses||"",cantidad:1,precio:precio,iva:iva,subtotal:sub,iva_importe:sub*iva/100,total_linea:sub*(1+iva/100),lote:"",caducidad:prod.caducidad_meses?String(prod.caducidad_meses)+" meses":""}]);});
   }
 
   function updLinea(idx,k,v){
@@ -1456,7 +1456,7 @@ function generarPDF(pedido,lineas,logoUrl,lang){
   var thead="",tbody="";
   if(esPresupuesto){
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.presentacion+"</th><th>"+tr.uds_caja+"</th><th>"+tr.uds_pallet+"</th><th>"+tr.caducidad+"</th><th>"+tr.iva_pct+"</th><th>"+tr.precio+"</th></tr>";
-    tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.presentacion||l.unidad||"")+"</td><td>"+(l.unidades_por_caja||"")+"</td><td>"+(l.unidades_por_pallet||"")+"</td><td>"+(l.caducidad_meses||"--")+"</td><td>"+iv+"%</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td></tr>";}).join("");
+    tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.presentacion||l.unidad||"")+"</td><td>"+(l.unidades_por_caja||"")+"</td><td>"+(l.unidades_por_pallet||"")+"</td><td>"+(l.caducidad||l.caducidad_meses||"--")+"</td><td>"+iv+"%</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td></tr>";}).join("");
   } else if(esProforma){
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.unidad+"</th><th>"+tr.cantidad+"</th><th>"+tr.lote+"</th><th>"+tr.cad_prod+"</th><th>"+tr.precio+"</th><th>"+tr.base+"</th><th>"+tr.iva_pct+"</th><th>"+tr.total_iva+"</th></tr>";
     tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.unidad||"Unidad")+"</td><td>"+l.cantidad+"</td><td>"+(l.lote||"--")+"</td><td>"+(l.caducidad||"--")+"</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td><td>"+parseFloat(l.subtotal||0).toFixed(2)+"</td><td>"+iv+"%</td><td>"+parseFloat(l.total_linea||0).toFixed(2)+"</td></tr>";}).join("");
@@ -1550,6 +1550,7 @@ function TabPedidos(props){
     return <PedidoEditor clients={clients} lineaActiva={lineaActiva} linColor={linColor} currentUser={currentUser} config={config} initial={view==="editar"?selected:null} onSaved={handleSaved} onCancel={function(){setView("lista");}} />;
   }
   if(view==="config"){
+    if(!currentUser.admin){setView("lista");return null;}
     return <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
         <Btn onClick={function(){setView("lista");}}>Volver</Btn>
@@ -1573,7 +1574,7 @@ function TabPedidos(props){
 
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16,alignItems:"center"}}>
       <Btn variant="primary" onClick={function(){setSelected(null);setView("nuevo");}}>+ Nuevo documento</Btn>
-      <Btn onClick={function(){setView("config");}}>Productos y precios</Btn>
+      {currentUser.admin&&<Btn onClick={function(){setView("config");}}>Productos y precios</Btn>}
       <div style={{flex:1}} />
       <select value={filtroTipo} onChange={function(e){setFiltroTipo(e.target.value);}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff"}}>
         <option value="">Todos los tipos</option>
