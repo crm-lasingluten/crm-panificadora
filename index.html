@@ -951,6 +951,126 @@ function usePedidosData(lineaActiva){
   return {pedidos,listas,loading,reload};
 }
 
+// ── Importar Precios desde Excel ──────────────────────────────────────────────
+function ImportarPrecios(props){
+  var linColor=props.linColor,lineaFiltro=props.lineaFiltro,onDone=props.onDone;
+  var [filas,setFilas]=useState([]);
+  var [errores,setErrores]=useState([]);
+  var [importando,setImportando]=useState(false);
+  var [resultado,setResultado]=useState(null);
+  var [step,setStep]=useState("upload");
+
+  function handleFile(e){
+    var file=e.target.files[0];
+    if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var wb=XLSX.read(ev.target.result,{type:"binary"});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var data=XLSX.utils.sheet_to_json(ws,{defval:""});
+        var mapped=[];var errs=[];
+        data.forEach(function(row,idx){
+          var codigo=String(row["Código Producto"]||row["Codigo Producto"]||row["codigo"]||"").trim();
+          var lista=String(row["Nombre Lista de Precio"]||row["lista"]||"").trim();
+          var precio=parseFloat(row["Precio"]||row["precio"]||0);
+          var iva=parseFloat(row["IVA (%)"]||row["iva"]||21);
+          var linea=row["Línea de Negocio"]||row["Linea de Negocio"]||lineaFiltro||"";
+          if(!codigo){errs.push("Fila "+(idx+2)+": falta Codigo Producto");return;}
+          if(!lista){errs.push("Fila "+(idx+2)+": falta Lista de Precio");return;}
+          if(isNaN(precio)||precio<0){errs.push("Fila "+(idx+2)+": precio invalido");return;}
+          mapped.push({linea:linea,codigo:codigo,lista:lista,precio:precio,iva:iva,_fila:idx+2});
+        });
+        setFilas(mapped);setErrores(errs);setStep("preview");setResultado(null);
+      }catch(ex){setErrores(["Error leyendo el archivo: "+ex.message]);setStep("upload");}
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  function handleImportar(){
+    if(!filas.length)return;
+    setImportando(true);
+    Promise.all([
+      sbGet("productos","select=id,codigo&order=codigo.asc"),
+      sbGet("listas_precio","select=id,nombre&activo=eq.true"),
+      sbGet("precios","select=*"),
+    ]).then(function(r){
+      var prods=r[0],listas=r[1],precios=r[2];
+      var ok=0,fail=0,idx=0;
+      function next(){
+        if(idx>=filas.length){setResultado({ok:ok,fail:fail});setStep("done");setImportando(false);onDone();return;}
+        var row=filas[idx++];
+        var prod=prods.find(function(p){return p.codigo===row.codigo;});
+        var lista=listas.find(function(l){return l.nombre===row.lista;});
+        if(!prod||!lista){fail++;return next();}
+        var existing=precios.find(function(p){return p.producto_id===prod.id&&p.lista_id===lista.id;});
+        var p=existing?sbPatch("precios",existing.id,{precio:row.precio}):sbPost("precios",{producto_id:prod.id,lista_id:lista.id,precio:row.precio});
+        p.then(function(){ok++;next();}).catch(function(){fail++;next();});
+      }
+      next();
+    }).catch(function(e){setResultado({ok:0,fail:filas.length,error:e.message});setStep("done");setImportando(false);});
+  }
+
+  return <div>
+    {step==="upload"&&<div>
+      <div style={{marginBottom:16,padding:"16px",background:"#f0f7ff",borderRadius:10,border:"1px solid #bfdbfe"}}>
+        <div style={{fontSize:14,fontWeight:600,marginBottom:8,color:"#1e40af"}}>Importar precios desde Excel</div>
+        <div style={{fontSize:12,color:"#555",lineHeight:1.7}}>
+          1. Usa la plantilla Excel de carga masiva (descargala desde el menu)<br/>
+          2. Completa: Codigo Producto, Nombre Lista de Precio, Precio<br/>
+          3. Los codigos y nombres deben coincidir exactamente con el sistema<br/>
+          4. Si el precio ya existe se actualiza. Si no, se crea.
+        </div>
+      </div>
+      <label style={{display:"inline-block",padding:"9px 18px",background:linColor,color:"#fff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}}>
+        Seleccionar archivo Excel
+        <input type="file" accept=".xlsx,.xls" onChange={handleFile} style={{display:"none"}} />
+      </label>
+      {errores.length>0&&<div style={{marginTop:12,padding:"10px 14px",background:"#fef2f2",borderRadius:8,border:"1px solid #fca5a5"}}>
+        {errores.map(function(e,i){return <div key={i} style={{fontSize:12,color:"#dc2626"}}>{e}</div>;})}
+      </div>}
+    </div>}
+    {step==="preview"&&<div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <span style={{fontSize:13,fontWeight:600}}>{filas.length} filas para importar</span>
+        <div style={{display:"flex",gap:8}}>
+          <Btn onClick={function(){setStep("upload");setFilas([]);setErrores([]);}}>Cancelar</Btn>
+          <Btn variant="primary" onClick={handleImportar} disabled={importando}>{importando?"Importando...":"Importar precios"}</Btn>
+        </div>
+      </div>
+      {errores.length>0&&<div style={{marginBottom:12,padding:"10px 14px",background:"#fffbeb",borderRadius:8,border:"1px solid #fde68a"}}>
+        <div style={{fontSize:12,fontWeight:600,marginBottom:4,color:"#92400e"}}>Filas con errores (se omitiran):</div>
+        {errores.map(function(e,i){return <div key={i} style={{fontSize:12,color:"#92400e"}}>{e}</div>;})}
+      </div>}
+      <div style={{overflowX:"auto",maxHeight:380,overflowY:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead style={{background:"#f9f9f9"}}><tr>
+            {["Fila","Linea","Codigo","Lista de precio","Precio","IVA"].map(function(h){return <th key={h} style={{padding:"7px 10px",textAlign:"left",fontWeight:600,color:"#555",borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>{h}</th>;})}
+          </tr></thead>
+          <tbody>{filas.map(function(f,i){return <tr key={i} style={{borderBottom:"1px solid #f5f5f5",background:i%2?"#fafafa":"#fff"}}>
+            <td style={{padding:"6px 10px",color:"#aaa",fontSize:11}}>{f._fila}</td>
+            <td style={{padding:"6px 10px",fontSize:11}}>{f.linea}</td>
+            <td style={{padding:"6px 10px",fontFamily:"monospace",color:linColor,fontWeight:600}}>{f.codigo}</td>
+            <td style={{padding:"6px 10px"}}>{f.lista}</td>
+            <td style={{padding:"6px 10px",textAlign:"right",fontWeight:600,color:"#1d9e75"}}>EUR {f.precio.toFixed(2)}</td>
+            <td style={{padding:"6px 10px",textAlign:"center"}}>{f.iva}%</td>
+          </tr>;})}</tbody>
+        </table>
+      </div>
+    </div>}
+    {step==="done"&&resultado&&<div style={{textAlign:"center",padding:"2rem"}}>
+      <div style={{fontSize:40,marginBottom:12}}>{resultado.fail===0?"OK":"AVISO"}</div>
+      <div style={{fontSize:16,fontWeight:700,marginBottom:8}}>{resultado.fail===0?"Importacion completada":"Importacion con errores"}</div>
+      <div style={{fontSize:13,color:"#555",marginBottom:16}}>
+        <span style={{color:"#1d9e75",fontWeight:600}}>{resultado.ok} precios importados</span>
+        {resultado.fail>0&&<span style={{color:"#e24b4a",fontWeight:600,marginLeft:12}}>{resultado.fail} fallidos (codigo o lista no encontrados)</span>}
+      </div>
+      {resultado.error&&<div style={{fontSize:12,color:"#e24b4a",marginBottom:12}}>{resultado.error}</div>}
+      <Btn variant="primary" onClick={function(){setStep("upload");setFilas([]);setErrores([]);setResultado(null);}}>Nueva importacion</Btn>
+    </div>}
+  </div>;
+}
+
 function ProductosManager(props){
   var linColor=props.linColor,lineaActiva=props.lineaActiva,currentUser=props.currentUser;
   var [productos,setProductos]=useState([]);
@@ -1016,7 +1136,7 @@ function ProductosManager(props){
       {BAUER_MARCAS.map(function(mc){return <button key={mc} onClick={function(){setMarcaFiltro(mc);}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:marcaFiltro===mc?"#f59e0b":"transparent",color:marcaFiltro===mc?"#fff":"#666"}}>{mc}</button>;})}
     </div>}
     <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:"1px solid #eee"}}>
-      {[["productos","Productos"],["listas","Listas de precio"],["tabla","Tabla de precios"]].map(function(item){
+      {[["productos","Productos"],["listas","Listas de precio"],["tabla","Tabla de precios"],["importar","Importar Excel"]].map(function(item){
         return <button key={item[0]} onClick={function(){setTabPM(item[0]);}} style={{padding:"7px 14px",background:"none",border:"none",cursor:"pointer",fontSize:13,fontWeight:tabPM===item[0]?600:400,color:tabPM===item[0]?linColor:"#666",borderBottom:tabPM===item[0]?"2px solid "+linColor:"2px solid transparent",marginBottom:-1}}>{item[1]}</button>;
       })}
     </div>
@@ -1166,6 +1286,8 @@ function ProductosManager(props){
           </table>
         </div>}
     </div>}
+
+    {tabPM==="importar"&&<ImportarPrecios linColor={linColor} lineaFiltro={lineaFiltro} onDone={reload} />}
   </div>;
 }
 
