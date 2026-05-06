@@ -1101,7 +1101,7 @@ function ProductosManager(props){
       sacos_por_pallet:f.sacos_por_pallet?parseFloat(f.sacos_por_pallet):null,
       unidades_por_caja:f.unidades_por_caja?parseFloat(f.unidades_por_caja):null,
       unidades_por_pallet:f.unidades_por_pallet?parseFloat(f.unidades_por_pallet):null,
-      caducidad_meses:f.caducidad_meses?parseInt(f.caducidad_meses):null,
+      caducidad_meses:f.caducidad_meses||null,
       iva_producto:parseFloat(f.iva_producto||21),marca:f.marca||null};
     var p=f.id?sbPatch("productos",f.id,body):sbPost("productos",body);
     p.then(function(){reload();setEditProd(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
