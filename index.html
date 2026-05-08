@@ -50,7 +50,7 @@ const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota","Mu
 const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
 const TIPOS_CLI   = ["Potencial","Cliente","Inactivo"];
-const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Pedidos","Fichas Tecnicas","Informes","Configuración"];
+const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Pedidos","Fichas Tecnicas","Catalogo","Informes","Configuración"];
 const MESES       = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const CY = new Date().getFullYear();
 const CM = new Date().getMonth() + 1;
@@ -1757,12 +1757,12 @@ function TabPedidos(props){
 
 // ── Fichas Técnicas ──────────────────────────────────────────────────────────
 function TabFichasTecnicas(props){
-  var clients=props.clients,currentUser=props.currentUser,lineaActiva=props.lineaActiva,linColor=props.linColor;
+  var currentUser=props.currentUser,lineaActiva=props.lineaActiva,linColor=props.linColor;
   var [productos,setProductos]=useState([]);
   var [fichas,setFichas]=useState([]);
   var [loading,setLoading]=useState(false);
   var [marcaFiltro,setMarcaFiltro]=useState("");
-  var [editando,setEditando]=useState(null); // {producto_id, tipo, url, nombre_archivo, id?}
+  var [editando,setEditando]=useState(null);
   var [saving,setSaving]=useState(false);
   var [busq,setBusq]=useState("");
 
@@ -1775,16 +1775,29 @@ function TabFichasTecnicas(props){
   }
   useEffect(function(){reload();},[lineaActiva]);
 
-  function getFicha(prodId,tipo){return fichas.find(function(f){return f.producto_id===prodId&&f.tipo===tipo;});}
+  function getFicha(prodId,tipo,idioma){
+    return fichas.find(function(f){return f.producto_id===prodId&&f.tipo===tipo&&(f.idioma||"es")===idioma;});
+  }
+
+  function fixGDriveUrl(url){
+    // Convert Google Drive share URL to embeddable preview URL
+    var m=url.match(/\/file\/d\/([^/?]+)/);
+    if(m)return "https://drive.google.com/file/d/"+m[1]+"/preview";
+    return url;
+  }
+
+  function getDownloadUrl(url){
+    // Convert preview URL to download URL for Google Drive
+    var m=url.match(/\/file\/d\/([^/?]+)/);
+    if(m)return "https://drive.google.com/uc?export=download&id="+m[1];
+    return url;
+  }
 
   function handleSave(){
-    if(!editando||!editando.url){alert("Ingresa la URL del PDF.");return;}
+    if(!editando||!editando.url.trim()){alert("Ingresa la URL del PDF.");return;}
     setSaving(true);
-    // Convert Google Drive share URL to direct view URL if needed
-    var url=editando.url.trim();
-    var gdMatch=url.match(/\/file\/d\/([^/]+)/);
-    if(gdMatch){url="https://drive.google.com/file/d/"+gdMatch[1]+"/preview";}
-    var body={producto_id:editando.producto_id,tipo:editando.tipo,url:url,nombre_archivo:editando.nombre_archivo||editando.tipo,linea_negocio:lineaActiva,marca:editando.marca||null,subido_por:currentUser.nombre};
+    var url=fixGDriveUrl(editando.url.trim());
+    var body={producto_id:editando.producto_id,tipo:editando.tipo,idioma:editando.idioma||"es",url:url,nombre_archivo:editando.nombre_archivo||editando.tipo,linea_negocio:lineaActiva,marca:editando.marca||null,subido_por:currentUser.nombre};
     var p=editando.id?sbPatch("fichas_tecnicas",editando.id,body):sbPost("fichas_tecnicas",body);
     p.then(function(){reload();setEditando(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
   }
@@ -1795,52 +1808,82 @@ function TabFichasTecnicas(props){
   }
 
   function openPDF(url){
-    var w=window.open(url,"_blank");
+    var previewUrl=fixGDriveUrl(url);
+    var w=window.open(previewUrl,"_blank");
     if(!w)alert("Permite ventanas emergentes para ver el PDF.");
+  }
+
+  function downloadPDF(url,nombre){
+    var dlUrl=getDownloadUrl(url);
+    var a=document.createElement("a");
+    a.href=dlUrl;
+    a.target="_blank";
+    a.download=nombre||"documento.pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   var prodsFilt=productos.filter(function(p){
     var q=busq.toLowerCase();
-    var matchMarca=!marcaFiltro||(p.marca===marcaFiltro);
-    var matchBusq=!q||p.nombre.toLowerCase().indexOf(q)>=0||(p.codigo||"").toLowerCase().indexOf(q)>=0;
-    return matchMarca&&matchBusq;
+    return (!marcaFiltro||p.marca===marcaFiltro)&&(!q||p.nombre.toLowerCase().indexOf(q)>=0||(p.codigo||"").toLowerCase().indexOf(q)>=0);
   });
 
-  return <div>
-    {/* Header */}
-    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
-      <div style={{flex:1,fontSize:13,color:"#555"}}>
-        Fichas técnicas y recetas — <strong>{lineaActiva}</strong>
-      </div>
-    </div>
+  // Cell renderer for each ficha slot
+  function FichaCell(cellProps){
+    var prodId=cellProps.prodId,tipo=cellProps.tipo,idioma=cellProps.idioma,prod=cellProps.prod;
+    var f=getFicha(prodId,tipo,idioma);
+    var colorBtn=tipo==="ficha"?"#185fa5":"#1d9e75";
+    var colorBorder=tipo==="ficha"?"#bfdbfe":"#86efac";
+    var colorBg=tipo==="ficha"?"#eff6ff":"#f0fdf4";
+    if(f){
+      return <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
+        <div style={{display:"flex",gap:4}}>
+          <button onClick={function(){openPDF(f.url);}} style={{padding:"4px 10px",borderRadius:6,border:"none",background:colorBtn,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:600}}>Ver</button>
+          <button onClick={function(){downloadPDF(f.url,f.nombre_archivo);}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+colorBorder,background:colorBg,cursor:"pointer",fontSize:11,color:colorBtn,fontWeight:600}}>Descargar</button>
+        </div>
+        {currentUser.admin&&<div style={{display:"flex",gap:4}}>
+          <button onClick={function(){setEditando({id:f.id,producto_id:prodId,tipo:tipo,idioma:idioma,url:f.url,nombre_archivo:f.nombre_archivo||"",marca:prod.marca,nombre_prod:prod.nombre});}} style={{padding:"3px 8px",borderRadius:5,border:"1px solid #ddd",background:"#fff",cursor:"pointer",fontSize:10,color:"#555"}}>Editar</button>
+          <button onClick={function(){handleDelete(f.id);}} style={{padding:"3px 8px",borderRadius:5,border:"1px solid #fca5a5",background:"#fef2f2",cursor:"pointer",fontSize:10,color:"#dc2626"}}>Eliminar</button>
+        </div>}
+      </div>;
+    }
+    if(!currentUser.admin)return <span style={{fontSize:11,color:"#ccc"}}>--</span>;
+    return <button onClick={function(){setEditando({producto_id:prodId,tipo:tipo,idioma:idioma,url:"",nombre_archivo:"",marca:prod.marca,nombre_prod:prod.nombre});}}
+      style={{padding:"4px 12px",borderRadius:6,border:"1px dashed "+colorBtn,background:colorBg,cursor:"pointer",fontSize:11,color:colorBtn}}>
+      + Agregar
+    </button>;
+  }
 
-    {/* Filtro marca para Bauer */}
+  return <div>
+    <div style={{fontSize:13,color:"#555",marginBottom:12}}>Fichas tecnicas y recetas — <strong>{lineaActiva}</strong></div>
+
     {lineaActiva==="Bauer Lemans"&&<div style={{display:"flex",gap:4,background:"#fff3e0",borderRadius:20,padding:3,marginBottom:12,width:"fit-content",border:"1px solid #ffe0b2"}}>
       <button onClick={function(){setMarcaFiltro("");}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:!marcaFiltro?"#f59e0b":"transparent",color:!marcaFiltro?"#fff":"#888"}}>Todas</button>
       {BAUER_MARCAS.map(function(mc){return <button key={mc} onClick={function(){setMarcaFiltro(mc);}} style={{padding:"4px 14px",borderRadius:16,border:"none",cursor:"pointer",fontSize:12,fontWeight:500,background:marcaFiltro===mc?"#f59e0b":"transparent",color:marcaFiltro===mc?"#fff":"#666"}}>{mc}</button>;})}
     </div>}
 
-    {/* Buscador */}
     <div style={{marginBottom:12}}>
       <input value={busq} onChange={function(e){setBusq(e.target.value);}} placeholder="Buscar producto..." style={{padding:"7px 12px",border:"1px solid #ddd",borderRadius:8,fontSize:13,width:"100%",maxWidth:360}} />
     </div>
 
-    {/* Modal editar/agregar URL */}
     {editando&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"#fff",borderRadius:14,padding:"28px 28px",width:"100%",maxWidth:520,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
-        <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>{editando.id?"Editar":"Agregar"} {editando.tipo==="ficha"?"Ficha Tecnica":"Receta"}</div>
+      <div style={{background:"#fff",borderRadius:14,padding:"28px",width:"100%",maxWidth:520,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:4}}>
+          {editando.id?"Editar":"Agregar"} {editando.tipo==="ficha"?"Ficha Tecnica":"Receta"} ({editando.idioma==="en"?"Ingles":"Espanol"})
+        </div>
         <div style={{fontSize:12,color:"#888",marginBottom:16}}>{editando.nombre_prod}</div>
         <div style={{marginBottom:12}}>
-          <div style={{fontSize:12,color:"#666",marginBottom:4}}>URL del PDF (Google Drive, Dropbox, etc.)</div>
+          <div style={{fontSize:12,color:"#666",marginBottom:4}}>URL del PDF</div>
           <input value={editando.url||""} onChange={function(e){setEditando(function(f){return Object.assign({},f,{url:e.target.value});});}}
             placeholder="https://drive.google.com/file/d/..."
             style={{padding:"8px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:12,width:"100%"}} />
-          <div style={{fontSize:11,color:"#aaa",marginTop:4}}>Si es Google Drive, comparte el archivo como "Cualquiera con el enlace" antes de pegar la URL.</div>
+          <div style={{fontSize:11,color:"#aaa",marginTop:4}}>Google Drive: comparte como "Cualquiera con el enlace" antes de pegar la URL.</div>
         </div>
         <div style={{marginBottom:16}}>
           <div style={{fontSize:12,color:"#666",marginBottom:4}}>Nombre del documento (opcional)</div>
           <input value={editando.nombre_archivo||""} onChange={function(e){setEditando(function(f){return Object.assign({},f,{nombre_archivo:e.target.value});});}}
-            placeholder={editando.tipo==="ficha"?"Ficha Tecnica v1":"Receta v1"}
+            placeholder="Ej: Ficha Tecnica Balance v2"
             style={{padding:"8px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:12,width:"100%"}} />
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -1850,54 +1893,132 @@ function TabFichasTecnicas(props){
       </div>
     </div>}
 
-    {/* Tabla de productos */}
     {loading?<Spinner/>:<div style={{overflowX:"auto"}}>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:"#fff",borderRadius:10}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,background:"#fff",borderRadius:10}}>
         <thead style={{background:"#f9f9f9"}}><tr>
-          <th style={{padding:"10px 12px",textAlign:"left",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee"}}>Codigo</th>
-          <th style={{padding:"10px 12px",textAlign:"left",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee"}}>Producto</th>
-          {lineaActiva==="Bauer Lemans"&&<th style={{padding:"10px 12px",textAlign:"left",fontWeight:600,color:"#555",fontSize:12,borderBottom:"1px solid #eee"}}>Marca</th>}
-          <th style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#185fa5",fontSize:12,borderBottom:"1px solid #eee"}}>Ficha Tecnica</th>
-          <th style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#1d9e75",fontSize:12,borderBottom:"1px solid #eee"}}>Receta</th>
+          <th style={{padding:"10px 12px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee",whiteSpace:"nowrap"}}>Codigo</th>
+          <th style={{padding:"10px 12px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Producto</th>
+          {lineaActiva==="Bauer Lemans"&&<th style={{padding:"10px 12px",textAlign:"left",fontWeight:600,color:"#555",fontSize:11,borderBottom:"1px solid #eee"}}>Marca</th>}
+          <th style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#185fa5",fontSize:11,borderBottom:"1px solid #eee"}}>Ficha Tecnica ES</th>
+          <th style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#185fa5",fontSize:11,borderBottom:"1px solid #eee"}}>Ficha Tecnica EN</th>
+          <th style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#1d9e75",fontSize:11,borderBottom:"1px solid #eee"}}>Receta ES</th>
+          <th style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#1d9e75",fontSize:11,borderBottom:"1px solid #eee"}}>Receta EN</th>
         </tr></thead>
         <tbody>{prodsFilt.map(function(p){
-          var ficha=getFicha(p.id,"ficha");
-          var receta=getFicha(p.id,"receta");
           return <tr key={p.id} style={{borderBottom:"1px solid #f0f0f0"}}>
-            <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11,color:linColor,fontWeight:600}}>{p.codigo}</td>
-            <td style={{padding:"10px 12px",fontWeight:500}}>
-              {p.nombre}
-              {p.presentacion&&<span style={{fontSize:11,color:"#aaa",marginLeft:6}}>{p.presentacion}</span>}
-            </td>
-            {lineaActiva==="Bauer Lemans"&&<td style={{padding:"10px 12px",fontSize:12,color:"#888"}}>{p.marca||"--"}</td>}
-            <td style={{padding:"10px 12px",textAlign:"center"}}>
-              {ficha
-                ?<div style={{display:"flex",gap:6,justifyContent:"center",alignItems:"center"}}>
-                  <button onClick={function(){openPDF(ficha.url);}} style={{padding:"5px 14px",borderRadius:7,border:"none",background:"#185fa5",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>Ver PDF</button>
-                  {currentUser.admin&&<button onClick={function(){setEditando({id:ficha.id,producto_id:p.id,tipo:"ficha",url:ficha.url,nombre_archivo:ficha.nombre_archivo,marca:p.marca,nombre_prod:p.nombre});}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12}}>Editar</button>}
-                  {currentUser.admin&&<button onClick={function(){handleDelete(ficha.id);}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid #fca5a5",background:"#fef2f2",cursor:"pointer",fontSize:12,color:"#dc2626"}}>X</button>}
-                </div>
-                :currentUser.admin
-                  ?<button onClick={function(){setEditando({producto_id:p.id,tipo:"ficha",url:"",nombre_archivo:"",marca:p.marca,nombre_prod:p.nombre});}} style={{padding:"5px 14px",borderRadius:7,border:"1px dashed #185fa5",background:"#f0f7ff",cursor:"pointer",fontSize:12,color:"#185fa5"}}>+ Agregar</button>
-                  :<span style={{fontSize:11,color:"#ccc"}}>Sin ficha</span>
-              }
-            </td>
-            <td style={{padding:"10px 12px",textAlign:"center"}}>
-              {receta
-                ?<div style={{display:"flex",gap:6,justifyContent:"center",alignItems:"center"}}>
-                  <button onClick={function(){openPDF(receta.url);}} style={{padding:"5px 14px",borderRadius:7,border:"none",background:"#1d9e75",color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>Ver PDF</button>
-                  {currentUser.admin&&<button onClick={function(){setEditando({id:receta.id,producto_id:p.id,tipo:"receta",url:receta.url,nombre_archivo:receta.nombre_archivo,marca:p.marca,nombre_prod:p.nombre});}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12}}>Editar</button>}
-                  {currentUser.admin&&<button onClick={function(){handleDelete(receta.id);}} style={{padding:"5px 8px",borderRadius:7,border:"1px solid #fca5a5",background:"#fef2f2",cursor:"pointer",fontSize:12,color:"#dc2626"}}>X</button>}
-                </div>
-                :currentUser.admin
-                  ?<button onClick={function(){setEditando({producto_id:p.id,tipo:"receta",url:"",nombre_archivo:"",marca:p.marca,nombre_prod:p.nombre});}} style={{padding:"5px 14px",borderRadius:7,border:"1px dashed #1d9e75",background:"#f0fdf4",cursor:"pointer",fontSize:12,color:"#1d9e75"}}>+ Agregar</button>
-                  :<span style={{fontSize:11,color:"#ccc"}}>Sin receta</span>
-              }
-            </td>
+            <td style={{padding:"10px 12px",fontFamily:"monospace",fontSize:11,color:linColor,fontWeight:600,whiteSpace:"nowrap"}}>{p.codigo}</td>
+            <td style={{padding:"10px 12px",fontWeight:500}}>{p.nombre}{p.presentacion&&<span style={{fontSize:11,color:"#aaa",marginLeft:6}}>{p.presentacion}</span>}</td>
+            {lineaActiva==="Bauer Lemans"&&<td style={{padding:"10px 12px",fontSize:11,color:"#888"}}>{p.marca||"--"}</td>}
+            <td style={{padding:"8px 10px",textAlign:"center"}}><FichaCell prodId={p.id} tipo="ficha" idioma="es" prod={p} /></td>
+            <td style={{padding:"8px 10px",textAlign:"center"}}><FichaCell prodId={p.id} tipo="ficha" idioma="en" prod={p} /></td>
+            <td style={{padding:"8px 10px",textAlign:"center"}}><FichaCell prodId={p.id} tipo="receta" idioma="es" prod={p} /></td>
+            <td style={{padding:"8px 10px",textAlign:"center"}}><FichaCell prodId={p.id} tipo="receta" idioma="en" prod={p} /></td>
           </tr>;
         })}</tbody>
       </table>
-      {prodsFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>No hay productos{busq?" que coincidan con la busqueda":""} en {lineaActiva}.</div>}
+      {prodsFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>No hay productos en {lineaActiva}{busq?" que coincidan":""} .</div>}
+    </div>}
+  </div>;
+}
+
+// ── Catálogo ──────────────────────────────────────────────────────────────────
+function TabCatalogo(props){
+  var currentUser=props.currentUser,lineaActiva=props.lineaActiva,linColor=props.linColor;
+  var [catalogos,setCatalogos]=useState([]);
+  var [loading,setLoading]=useState(false);
+  var [editando,setEditando]=useState(null);
+  var [saving,setSaving]=useState(false);
+
+  function reload(){
+    setLoading(true);
+    sbGet("catalogos","linea_negocio=eq."+encodeURIComponent(lineaActiva)+"&order=created_at.desc")
+      .then(function(r){setCatalogos(r);setLoading(false);}).catch(function(){setLoading(false);});
+  }
+  useEffect(function(){reload();},[lineaActiva]);
+
+  function fixGDriveUrl(url){
+    var m=url.match(/\/file\/d\/([^/?]+)/);
+    if(m)return "https://drive.google.com/file/d/"+m[1]+"/preview";
+    return url;
+  }
+  function getDownloadUrl(url){
+    var m=url.match(/\/file\/d\/([^/?]+)/);
+    if(m)return "https://drive.google.com/uc?export=download&id="+m[1];
+    return url;
+  }
+
+  function handleSave(){
+    if(!editando||!editando.url.trim()){alert("Ingresa la URL.");return;}
+    setSaving(true);
+    var url=fixGDriveUrl(editando.url.trim());
+    var body={nombre:editando.nombre||"Catalogo",url:url,linea_negocio:lineaActiva,idioma:editando.idioma||"es",descripcion:editando.descripcion||null,subido_por:currentUser.nombre};
+    var p=editando.id?sbPatch("catalogos",editando.id,body):sbPost("catalogos",body);
+    p.then(function(){reload();setEditando(null);setSaving(false);}).catch(function(e){alert("Error: "+e.message);setSaving(false);});
+  }
+  function handleDelete(id){
+    if(!confirm("Eliminar este catalogo?"))return;
+    sbDel("catalogos",id).then(function(){reload();}).catch(function(e){alert("Error: "+e.message);});
+  }
+  function openDoc(url){var w=window.open(fixGDriveUrl(url),"_blank");if(!w)alert("Permite ventanas emergentes.");}
+  function downloadDoc(url,nombre){
+    var a=document.createElement("a");a.href=getDownloadUrl(url);a.target="_blank";a.download=nombre||"catalogo.pdf";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{fontSize:13,color:"#555"}}>Catalogos — <strong>{lineaActiva}</strong></div>
+      {currentUser.admin&&<Btn variant="primary" onClick={function(){setEditando({url:"",nombre:"",descripcion:"",idioma:"es"});}}>+ Agregar catalogo</Btn>}
+    </div>
+
+    {editando&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.45)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{background:"#fff",borderRadius:14,padding:"28px",width:"100%",maxWidth:520,boxShadow:"0 8px 32px rgba(0,0,0,0.18)"}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:16}}>{editando.id?"Editar":"Nuevo"} catalogo</div>
+        <FL label="Nombre del catalogo"><Inp value={editando.nombre||""} onChange={function(v){setEditando(function(f){return Object.assign({},f,{nombre:v});});}} placeholder="Catalogo 2025, Lista de productos..." /></FL>
+        <FL label="Idioma" style={{marginTop:8}}>
+          <select value={editando.idioma||"es"} onChange={function(e){setEditando(function(f){return Object.assign({},f,{idioma:e.target.value});});}} style={{padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff",width:"100%"}}>
+            <option value="es">Espanol</option>
+            <option value="en">English</option>
+          </select>
+        </FL>
+        <FL label="URL del documento" style={{marginTop:8}}>
+          <Inp value={editando.url||""} onChange={function(v){setEditando(function(f){return Object.assign({},f,{url:v});});}} placeholder="https://drive.google.com/file/d/..." />
+        </FL>
+        <FL label="Descripcion (opcional)" style={{marginTop:8}}>
+          <Inp value={editando.descripcion||""} onChange={function(v){setEditando(function(f){return Object.assign({},f,{descripcion:v});});}} placeholder="Version 2025, actualizado mayo..." />
+        </FL>
+        <div style={{fontSize:11,color:"#aaa",marginBottom:16}}>Google Drive: comparte como "Cualquiera con el enlace" antes de pegar la URL.</div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="primary" onClick={handleSave} disabled={saving||!editando.url}>{saving?"Guardando...":"Guardar"}</Btn>
+          <Btn onClick={function(){setEditando(null);}}>Cancelar</Btn>
+        </div>
+      </div>
+    </div>}
+
+    {loading?<Spinner/>:<div>
+      {catalogos.length===0
+        ?<div style={{textAlign:"center",color:"#aaa",padding:"3rem",fontSize:13}}>{currentUser.admin?"No hay catalogos. Agrega el primero.":"No hay catalogos disponibles."}</div>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+          {catalogos.map(function(c){
+            return <div key={c.id} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:12,padding:"16px",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#222"}}>{c.nombre}</div>
+                  {c.descripcion&&<div style={{fontSize:11,color:"#888",marginTop:2}}>{c.descripcion}</div>}
+                </div>
+                <span style={{padding:"2px 10px",borderRadius:10,background:c.idioma==="en"?"#eff6ff":"#f0fdf4",color:c.idioma==="en"?"#185fa5":"#1d9e75",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{c.idioma==="en"?"EN":"ES"}</span>
+              </div>
+              <div style={{fontSize:11,color:"#aaa",marginBottom:12}}>Subido por {c.subido_por} · {c.created_at?new Date(c.created_at).toLocaleDateString("es-ES"):""}</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={function(){openDoc(c.url);}} style={{padding:"6px 14px",borderRadius:7,border:"none",background:linColor,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:600}}>Ver</button>
+                <button onClick={function(){downloadDoc(c.url,c.nombre);}} style={{padding:"6px 14px",borderRadius:7,border:"1px solid "+linColor,background:"#fff",cursor:"pointer",fontSize:12,color:linColor,fontWeight:600}}>Descargar</button>
+                {currentUser.admin&&<button onClick={function(){setEditando(Object.assign({},c));}} style={{padding:"6px 10px",borderRadius:7,border:"1px solid #ddd",background:"#fff",cursor:"pointer",fontSize:12}}>Editar</button>}
+                {currentUser.admin&&<button onClick={function(){handleDelete(c.id);}} style={{padding:"6px 10px",borderRadius:7,border:"1px solid #fca5a5",background:"#fef2f2",cursor:"pointer",fontSize:12,color:"#dc2626"}}>Eliminar</button>}
+              </div>
+            </div>;
+          })}
+        </div>
+      }
     </div>}
   </div>;
 }
@@ -2400,7 +2521,8 @@ function CRM() {
         {tab==="Actividades"   &&<TabActividades />}
         {tab==="Ventas"        &&<TabVentas />}
         {tab==="Pedidos"       &&<TabPedidos clients={clients} config={config} currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} onRePrintFromClient={onRePrintFromClient} />}
-        {tab==="Fichas Tecnicas"&&<TabFichasTecnicas clients={clients} currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
+        {tab==="Fichas Tecnicas"&&<TabFichasTecnicas currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
+        {tab==="Catalogo"       &&<TabCatalogo currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
         {tab==="Informes"      &&<TabInformes />}
         {tab==="Configuración" &&<TabConfiguracion />}
       </div>}
