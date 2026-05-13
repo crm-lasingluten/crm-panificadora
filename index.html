@@ -2023,6 +2023,11 @@ function TabCatalogo(props){
   </div>;
 }
 
+
+function VozAsistente(props) {
+  return <button style={{position:"fixed",bottom:24,right:24,padding:"10px 16px",background:props.linColor,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",zIndex:998,fontWeight:700}}>VOZ</button>;
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 function CRM() {
   var sesion=null;
@@ -2526,6 +2531,7 @@ function CRM() {
         {tab==="Informes"      &&<TabInformes />}
         {tab==="Configuración" &&<TabConfiguracion />}
       </div>}
+      <VozAsistente linColor={linColor} />
     </div>
   );
 }
