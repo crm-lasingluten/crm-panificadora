@@ -2034,8 +2034,8 @@ function VozAsistente(props) {
   var [open, setOpen] = useState(false);
   var [escuchando, setEscuchando] = useState(false);
   var [texto, setTexto] = useState("");
-  var [interpretando, setInterpretando] = useState(false);
-  var [resultado, setResultado] = useState(null);
+  var [tipoAct, setTipoAct] = useState("Visita");
+  var [clienteSel, setClienteSel] = useState("");
   var [guardando, setGuardando] = useState(false);
   var [msg, setMsg] = useState("");
   var recRef = useRef(null);
@@ -2046,7 +2046,7 @@ function VozAsistente(props) {
     var r = new SR();
     r.lang = "es-ES"; r.continuous = false; r.interimResults = true;
     recRef.current = r;
-    r.onstart = function() { setEscuchando(true); setTexto(""); setResultado(null); setMsg(""); };
+    r.onstart = function() { setEscuchando(true); setMsg(""); };
     r.onresult = function(e) {
       var fin = "", tmp = "";
       for (var i = e.resultIndex; i < e.results.length; i++) {
@@ -2062,73 +2062,58 @@ function VozAsistente(props) {
 
   function detener() { if (recRef.current) recRef.current.stop(); }
 
-  function interpretar() {
-    if (!texto.trim()) { setMsg("No hay texto."); return; }
-    setInterpretando(true); setResultado(null); setMsg("");
-    var clis = clients.slice(0, 60).map(function(c) { return c.nombre; }).join(", ");
-    var gest = (config && config.gestores ? config.gestores : [currentUser.nombre]).join(", ");
-    var p = "Eres asistente CRM. Gestor dijo: " + JSON.stringify(texto)
-      + " Clientes: " + clis + " Gestores: " + gest + " Linea: " + lineaActiva
-      + " Responde SOLO JSON. Actividad: {\"accion\":\"actividad\",\"tipo\":\"Visita\",\"cliente_nombre\":\"x\",\"nota\":\"x\",\"gestor\":\"x\",\"prioridad\":\"Media\",\"estado\":\"Completada\",\"resumen\":\"x\"}"
-      + " Cliente nuevo: {\"accion\":\"cliente\",\"nombre\":\"x\",\"canal\":\"x\",\"grupo\":\"x\",\"gestor\":\"x\",\"resumen\":\"x\"}"
-      + " Si no entiende: {\"accion\":\"desconocido\",\"resumen\":\"x\"}";
-    fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 400, messages: [{ role: "user", content: p }] }) })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        try { setResultado(JSON.parse((data.content && data.content[0] ? data.content[0].text : "{}").replace(/```json|```/g, "").trim())); }
-        catch(e) { setMsg("No pude interpretar."); }
-        setInterpretando(false);
-      }).catch(function(e) { setMsg("Error: " + e.message); setInterpretando(false); });
-  }
-
-  function confirmar() {
-    if (!resultado) return;
+  function guardar() {
+    if (!texto.trim()) { setMsg("No hay texto grabado."); return; }
     setGuardando(true);
-    if (resultado.accion === "actividad") {
-      var cli = clients.find(function(c) { return norm(c.nombre) === norm(resultado.cliente_nombre || ""); }) || clients.find(function(c) { return norm(c.nombre).indexOf(norm(resultado.cliente_nombre || "")) >= 0; });
-      saveActivity({ tipo: resultado.tipo || "Nota", titulo: "", nota: resultado.nota || texto, fecha: tod(), gestor: resultado.gestor || currentUser.nombre, prioridad: resultado.prioridad || "Media", estado: resultado.estado || "Completada", cliente_id: cli ? cli.id : null, linea_negocio: lineaActiva });
-      setMsg("Actividad guardada"); setResultado(null); setTexto(""); setGuardando(false);
-      setTimeout(function() { setOpen(false); setMsg(""); }, 1800);
-    } else if (resultado.accion === "cliente") {
-      sbPost("clientes", { nombre: resultado.nombre || "", canal: resultado.canal || "", grupo: resultado.grupo || "", gestor: resultado.gestor || currentUser.nombre, linea_negocio: lineaActiva, tipo_cliente: "Activo" })
-        .then(function() { setMsg("Cliente creado"); setResultado(null); setTexto(""); setGuardando(false); setTimeout(function() { setOpen(false); setMsg(""); }, 1800); })
-        .catch(function(e) { setMsg("Error: " + e.message); setGuardando(false); });
-    } else { setMsg("No reconoci la accion."); setGuardando(false); }
+    var cli = clients.find(function(c) { return c.nombre === clienteSel; });
+    saveActivity({
+      tipo: tipoAct, titulo: "", nota: texto, fecha: tod(),
+      gestor: currentUser.nombre, prioridad: "Media", estado: "Completada",
+      cliente_id: cli ? cli.id : null, linea_negocio: lineaActiva
+    });
+    setMsg("Actividad guardada"); setTexto(""); setGuardando(false);
+    setTimeout(function() { setOpen(false); setMsg(""); }, 1500);
   }
 
-  if (!open) { return <button onClick={function() { setOpen(true); }} style={{position:"fixed",bottom:24,right:24,width:52,height:52,borderRadius:"50%",border:"none",background:linColor,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",zIndex:998,boxShadow:"0 4px 16px rgba(0,0,0,0.25)"}}>VOZ</button>; }
+  if (!open) {
+    return <button onClick={function() { setOpen(true); }} style={{position:"fixed",bottom:24,right:24,width:52,height:52,borderRadius:"50%",border:"none",background:linColor,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",zIndex:998,boxShadow:"0 4px 16px rgba(0,0,0,0.25)"}}>VOZ</button>;
+  }
 
-  var resumenBox = null;
-  if (resultado && resultado.accion !== "desconocido") { resumenBox = <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:8,padding:"10px 12px",marginBottom:10}}><div style={{fontSize:11,color:"#888",marginBottom:4}}>Claude interpreto:</div><div style={{fontSize:13,color:"#1d6b3e",fontWeight:500}}>{resultado.resumen}</div></div>; }
-  if (resultado && resultado.accion === "desconocido") { resumenBox = <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:13,color:"#92400e"}}>No entendi. Intenta de nuevo.</div>; }
-
-  var botonesBox = null;
-  if (resultado && resultado.accion !== "desconocido") { botonesBox = <div style={{display:"flex",gap:8}}><Btn variant="primary" onClick={confirmar} disabled={guardando} style={{flex:1}}>{guardando ? "Guardando..." : "Confirmar"}</Btn><Btn onClick={function() { setResultado(null); setTexto(""); }} style={{flex:1}}>Reintentar</Btn></div>; }
+  var tipos = ["Llamada","Email","Reunion","Visita","WhatsApp","Nota","Muestras"];
+  var cliNames = clients.map(function(c) { return c.nombre; });
 
   var textoBox = null;
-  if (texto) { textoBox = <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#333",marginBottom:10,border:"1px solid #eee"}}>{texto}</div>; }
-
-  var interpretarBtn = null;
-  if (texto && !resultado) { interpretarBtn = <Btn variant="primary" onClick={interpretar} disabled={interpretando} style={{width:"100%",marginBottom:8}}>{interpretando ? "Interpretando..." : "Interpretar con IA"}</Btn>; }
+  if (texto) { textoBox = <div style={{background:"#f8f8f8",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#333",marginBottom:10,border:"1px solid #eee",lineHeight:1.5}}>{texto}</div>; }
 
   var msgBox = null;
-  if (msg) { msgBox = <div style={{marginTop:8,padding:"8px 10px",borderRadius:8,fontSize:12,textAlign:"center",fontWeight:500,background:msg.indexOf("guardad") >= 0 || msg.indexOf("creado") >= 0 ? "#f0fdf4" : "#fef2f2",color:msg.indexOf("guardad") >= 0 || msg.indexOf("creado") >= 0 ? "#1d6b3e" : "#dc2626"}}>{msg}</div>; }
+  if (msg) { msgBox = <div style={{marginTop:8,padding:"8px 10px",borderRadius:8,fontSize:12,textAlign:"center",fontWeight:500,background:msg.indexOf("guardad") >= 0 ? "#f0fdf4" : "#fef2f2",color:msg.indexOf("guardad") >= 0 ? "#1d6b3e" : "#dc2626"}}>{msg}</div>; }
 
   return (
-    <div style={{position:"fixed",bottom:24,right:24,width:340,background:"#fff",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:998,overflow:"hidden"}}>
+    <div style={{position:"fixed",bottom:24,right:24,width:320,background:"#fff",borderRadius:16,boxShadow:"0 8px 32px rgba(0,0,0,0.2)",zIndex:998,overflow:"hidden"}}>
       <div style={{background:linColor,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{color:"#fff",fontWeight:700,fontSize:14}}>Asistente de voz</span>
-        <button onClick={function() { setOpen(false); setTexto(""); setResultado(null); setMsg(""); }} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>x</button>
+        <span style={{color:"#fff",fontWeight:700,fontSize:14}}>Actividad por voz</span>
+        <button onClick={function() { setOpen(false); setTexto(""); setMsg(""); }} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer"}}>x</button>
       </div>
       <div style={{padding:16}}>
-        <div style={{textAlign:"center",marginBottom:12}}>
-          <button onClick={escuchando ? detener : iniciar} style={{width:64,height:64,borderRadius:"50%",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:escuchando ? "#e24b4a" : "#f5f5f5",color:escuchando ? "#fff" : linColor,boxShadow:escuchando ? "0 0 0 6px rgba(226,75,74,0.2)" : "none"}}>{escuchando ? "STOP" : "MIC"}</button>
-          <div style={{fontSize:11,color:escuchando ? "#e24b4a" : "#888",marginTop:6,fontWeight:500}}>{escuchando ? "Escuchando..." : "Pulsa para hablar"}</div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"#666",marginBottom:4}}>Tipo de actividad</div>
+          <select value={tipoAct} onChange={function(e) { setTipoAct(e.target.value); }} style={{width:"100%",padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff"}}>
+            {tipos.map(function(t) { return <option key={t} value={t}>{t}</option>; })}
+          </select>
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"#666",marginBottom:4}}>Cliente (opcional)</div>
+          <select value={clienteSel} onChange={function(e) { setClienteSel(e.target.value); }} style={{width:"100%",padding:"7px 10px",border:"1px solid #ddd",borderRadius:8,fontSize:13,background:"#fff"}}>
+            <option value="">-- Sin cliente --</option>
+            {cliNames.map(function(n) { return <option key={n} value={n}>{n}</option>; })}
+          </select>
+        </div>
+        <div style={{textAlign:"center",marginBottom:10}}>
+          <button onClick={escuchando ? detener : iniciar} style={{width:60,height:60,borderRadius:"50%",border:"none",cursor:"pointer",fontSize:13,fontWeight:700,background:escuchando ? "#e24b4a" : "#f5f5f5",color:escuchando ? "#fff" : linColor,boxShadow:escuchando ? "0 0 0 6px rgba(226,75,74,0.2)" : "none"}}>{escuchando ? "STOP" : "MIC"}</button>
+          <div style={{fontSize:11,color:escuchando ? "#e24b4a" : "#888",marginTop:4}}>{escuchando ? "Escuchando..." : "Pulsa para hablar"}</div>
         </div>
         {textoBox}
-        {interpretarBtn}
-        {resumenBox}
-        {botonesBox}
+        {texto ? <Btn variant="primary" onClick={guardar} disabled={guardando} style={{width:"100%"}}>{guardando ? "Guardando..." : "Guardar actividad"}</Btn> : null}
         {msgBox}
       </div>
     </div>
