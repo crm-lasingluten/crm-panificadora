@@ -1570,7 +1570,7 @@ function generarPDF(pedido,lineas,logoUrl,lang){
   }
 
   var gruposIva={};
-  if(esProforma){lineas.forEach(function(l){var k=l.iva_linea||l.iva||21;if(!gruposIva[k])gruposIva[k]={base:0,iv:0};gruposIva[k].base+=parseFloat(l.subtotal||0);gruposIva[k].iv+=parseFloat(l.iva_importe||0);});}
+  if(esProforma){lineas.forEach(function(l){var k=(l.iva_linea!=null&&l.iva_linea!==undefined?parseFloat(l.iva_linea):l.iva!=null&&l.iva!==undefined?parseFloat(l.iva):21);if(!gruposIva[k])gruposIva[k]={base:0,iv:0};gruposIva[k].base+=parseFloat(l.subtotal||0);gruposIva[k].iv+=parseFloat(l.iva_importe||0);});}
   var totBase=lineas.reduce(function(s,l){return s+parseFloat(l.subtotal||0);},0);
   var totIva=Object.values(gruposIva).reduce(function(s,g){return s+g.iv;},0);
   var totFinal=totBase+totIva;
@@ -1582,10 +1582,10 @@ function generarPDF(pedido,lineas,logoUrl,lang){
   }
   if(esPresupuesto){
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.presentacion+"</th><th>"+tr.uds_caja+"</th><th>"+tr.uds_pallet+"</th><th>"+tr.caducidad+"</th><th>"+tr.iva_pct+"</th><th>"+tr.precio+"</th></tr>";
-    tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.presentacion||l.unidad||"")+"</td><td>"+(l.unidades_por_caja||"")+"</td><td>"+(l.unidades_por_pallet||"")+"</td><td>"+(tradCad(l.caducidad||l.caducidad_meses,lang))+"</td><td>"+iv+"%</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td></tr>";}).join("");
+    tbody=lineas.map(function(l){var iv=(l.iva_linea!=null&&l.iva_linea!==undefined?parseFloat(l.iva_linea):l.iva!=null&&l.iva!==undefined?parseFloat(l.iva):21);return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.presentacion||l.unidad||"")+"</td><td>"+(l.unidades_por_caja||"")+"</td><td>"+(l.unidades_por_pallet||"")+"</td><td>"+(tradCad(l.caducidad||l.caducidad_meses,lang))+"</td><td>"+iv+"%</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td></tr>";}).join("");
   } else if(esProforma){
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.unidad+"</th><th>"+tr.cantidad+"</th><th>"+tr.lote+"</th><th>"+tr.cad_prod+"</th><th>"+tr.precio+"</th><th>"+tr.base+"</th><th>"+tr.iva_pct+"</th><th>"+tr.total_iva+"</th></tr>";
-    tbody=lineas.map(function(l){var iv=l.iva_linea||l.iva||21;return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.unidad||"Unidad")+"</td><td>"+l.cantidad+"</td><td>"+(l.lote||"--")+"</td><td>"+(l.caducidad||"--")+"</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td><td>"+parseFloat(l.subtotal||0).toFixed(2)+"</td><td>"+iv+"%</td><td>"+parseFloat(l.total_linea||0).toFixed(2)+"</td></tr>";}).join("");
+    tbody=lineas.map(function(l){var iv=(l.iva_linea!=null&&l.iva_linea!==undefined?parseFloat(l.iva_linea):l.iva!=null&&l.iva!==undefined?parseFloat(l.iva):21);return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.unidad||"Unidad")+"</td><td>"+l.cantidad+"</td><td>"+(l.lote||"--")+"</td><td>"+(l.caducidad||"--")+"</td><td>"+parseFloat(l.precio||0).toFixed(2)+"</td><td>"+parseFloat(l.subtotal||0).toFixed(2)+"</td><td>"+iv+"%</td><td>"+parseFloat(l.total_linea||0).toFixed(2)+"</td></tr>";}).join("");
   } else {
     thead="<tr><th>"+tr.codigo+"</th><th>"+tr.producto+"</th><th>"+tr.unidad+"</th><th>"+tr.cantidad+"</th><th>"+tr.lote+"</th><th>"+tr.cad_prod+"</th></tr>";
     tbody=lineas.map(function(l){return "<tr><td class=m>"+l.codigo+"</td><td>"+l.nombre+"</td><td>"+(l.unidad||"Unidad")+"</td><td>"+l.cantidad+"</td><td>"+(l.lote||"--")+"</td><td>"+(l.caducidad||"--")+"</td></tr>";}).join("");
