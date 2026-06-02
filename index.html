@@ -1331,7 +1331,7 @@ function PedidoEditor(props){
   function addLinea(prod){
     if(lineas.find(function(l){return l.producto_id===prod.id;}))return;
     var precio=getP(prod.id,form.lista_id);
-    var iva=parseFloat(prod.iva_producto||21);
+    var iva=prod.iva_producto!==null&&prod.iva_producto!==undefined?parseFloat(prod.iva_producto):21;
     var sub=precio;
     setLineas(function(prev){return prev.concat([{producto_id:prod.id,codigo:prod.codigo,nombre:prod.nombre,unidad_medida:prod.unidad_medida||"Unidad",presentacion:prod.presentacion||"",unidades_por_caja:prod.unidades_por_caja||"",unidades_por_pallet:prod.unidades_por_pallet||"",caducidad_meses:prod.caducidad_meses||"",cantidad:1,precio:precio,iva:iva,subtotal:sub,iva_importe:sub*iva/100,total_linea:sub*(1+iva/100),lote:"",caducidad:prod.caducidad_meses||""}]);});
   }
