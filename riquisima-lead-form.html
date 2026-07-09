@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Riquíssima - Cuéntanos qué prefieres</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #F2EFE6;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: #FFFFFF;
+    max-width: 460px;
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+  }
+  .card-header {
+    background: #FFFFFF;
+    padding: 34px 32px 24px 32px;
+    text-align: center;
+    border-bottom: 4px solid #1D7C8C;
+  }
+  .logo-img {
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 16px;
+  }
+  .card-header .eyebrow {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #1D7C8C;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+  .card-header p.subtitle {
+    color: #6B6B6B;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .card-body { padding: 32px; }
+  .field { margin-bottom: 18px; }
+  .field label {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #1D7C8C;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #E4E0D6;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    color: #2B2B2B;
+    background: #FAF9F6;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: #1D7C8C;
+  }
+  .submit-btn {
+    width: 100%;
+    background: #1D7C8C;
+    color: #FFFFFF;
+    border: none;
+    padding: 15px;
+    border-radius: 30px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: background 0.2s;
+  }
+  .submit-btn:hover { background: #166270; }
+  .submit-btn:disabled { background: #A8C9CE; cursor: not-allowed; }
+  .disclaimer {
+    font-size: 11px;
+    color: #9A9A9A;
+    text-align: center;
+    margin-top: 16px;
+    line-height: 16px;
+  }
+  .success-view, .error-view { display: none; text-align: center; padding: 20px 0; }
+  .success-view.show, .error-view.show { display: block; }
+  .success-icon {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: #9FDB7A; color: #1D3E1A;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; margin: 0 auto 18px auto;
+  }
+  .success-view h2 { font-family: Georgia, serif; color: #2B2B2B; margin-bottom: 10px; font-size: 20px; }
+  .success-view p { color: #6B6B6B; font-size: 14px; line-height: 20px; }
+  .error-view p { color: #B23A3A; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <p class="eyebrow">Nueva línea · Muy pronto</p>
+    <img class="logo-img" src="REEMPLAZAR-URL-LOGO-RIQUISSIMA.png" alt="Riquíssima - Pizza sin gluten, artesanal y deliciosa">
+    <p class="subtitle">Cuéntanos qué prefieres y sé de los primeros en probarla</p>
+  </div>
+
+  <div class="card-body">
+
+    <form id="leadForm">
+      <div class="field">
+        <label for="nombre">Nombre</label>
+        <input type="text" id="nombre" required placeholder="Tu nombre">
+      </div>
+
+      <div class="field">
+        <label for="tienda">Nombre de la tienda</label>
+        <input type="text" id="tienda" placeholder="Nombre de tu tienda o negocio">
+      </div>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" required placeholder="tu@email.com">
+      </div>
+
+      <div class="field">
+        <label for="telefono">Teléfono</label>
+        <input type="tel" id="telefono" placeholder="600 000 000">
+      </div>
+
+      <div class="field">
+        <label for="sabor">Sabor preferido</label>
+        <select id="sabor" required>
+          <option value="" disabled selected>Selecciona una opción</option>
+          <option value="Mozzarella">Mozzarella</option>
+          <option value="4 Quesos">4 Quesos</option>
+          <option value="Ambos">¡Ambos!</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="formato">Formato preferido</label>
+        <select id="formato" required>
+          <option value="" disabled selected>Selecciona una opción</option>
+          <option value="Individual">Pack individual</option>
+          <option value="Caja x2">Caja x2 unidades</option>
+          <option value="Ambos">Ambos</option>
+        </select>
+      </div>
+
+      <button type="submit" class="submit-btn" id="submitBtn">Quiero más información</button>
+
+      <p class="disclaimer">
+        Al enviar este formulario aceptas que La Sin Gluten te contacte sobre la disponibilidad de Riquíssima.
+      </p>
+    </form>
+
+    <div class="success-view" id="successView">
+      <div class="success-icon">✓</div>
+      <h2>¡Gracias!</h2>
+      <p>Ya tenemos tus datos. Te avisaremos en cuanto Riquíssima esté disponible, con acceso anticipado antes que nadie.</p>
+    </div>
+
+    <div class="error-view" id="errorView">
+      <p>Hubo un problema al enviar tu información. Por favor, inténtalo de nuevo en unos segundos.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ===== Configuración Supabase (mismo patrón sbGet/sbPost del resto de tus proyectos) =====
+  const SUPABASE_URL = 'https://lbbpnnvwtanurtjqgcqv.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxiYnBubnZ3dGFudXJ0anFnY3F2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NjM2NDEsImV4cCI6MjA5MjMzOTY0MX0.a25lrgUlzDM4TSp4c6KOCQ3ERZnSk8-5r2y9DbhRPxg';
+
+  async function sbPost(table, payload) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText);
+    }
+    return true;
+  }
+
+  const form = document.getElementById('leadForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const successView = document.getElementById('successView');
+  const errorView = document.getElementById('errorView');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorView.classList.remove('show');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Enviando...';
+
+    const payload = {
+      nombre: document.getElementById('nombre').value.trim(),
+      nombre_tienda: document.getElementById('tienda').value.trim() || null,
+      email: document.getElementById('email').value.trim(),
+      telefono: document.getElementById('telefono').value.trim() || null,
+      sabor_preferido: document.getElementById('sabor').value,
+      formato_preferido: document.getElementById('formato').value,
+      origen: 'email_sondeo'
+    };
+
+    try {
+      await sbPost('riquisima_leads', payload);
+      form.style.display = 'none';
+      successView.classList.add('show');
+    } catch (err) {
+      console.error(err);
+      errorView.classList.add('show');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Quiero más información';
+    }
+  });
+</script>
+
+</body>
+</html>
