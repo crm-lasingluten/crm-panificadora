@@ -78,7 +78,10 @@
 <div id="dashboard">
   <header class="top">
     <img src="https://crm-lasingluten.github.io/crm-panificadora/riquissima-logo.png" alt="Riquíssima" style="width:170px; height:auto;">
-    <button class="toolbar-btn" style="padding:9px 16px;border-radius:8px;border:none;background:#1D7C8C;color:#fff;cursor:pointer;font-weight:bold;" onclick="exportCSV()">Exportar CSV</button>
+    <div style="display:flex; gap:10px;">
+      <button class="toolbar-btn" style="padding:9px 16px;border-radius:8px;border:none;background:#1D7C8C;color:#fff;cursor:pointer;font-weight:bold;" onclick="exportCSV()">Exportar CSV</button>
+      <button style="padding:9px 16px;border-radius:8px;border:1.5px solid #1D7C8C;background:#fff;color:#1D7C8C;cursor:pointer;font-weight:bold;" onclick="cerrarSesion()">Cerrar sesión</button>
+    </div>
   </header>
 
   <div class="stats" id="statsRow"></div>
@@ -128,6 +131,7 @@
   function tryLogin() {
     const val = document.getElementById('pwInput').value;
     if (val === TEAM_PASSWORD) {
+      localStorage.setItem('riquisima_panel_auth', 'true');
       document.getElementById('loginGate').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
       loadLeads();
@@ -135,6 +139,21 @@
       document.getElementById('loginErr').style.display = 'block';
     }
   }
+
+  function checkSavedSession() {
+    if (localStorage.getItem('riquisima_panel_auth') === 'true') {
+      document.getElementById('loginGate').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      loadLeads();
+    }
+  }
+
+  function cerrarSesion() {
+    localStorage.removeItem('riquisima_panel_auth');
+    location.reload();
+  }
+
+  checkSavedSession();
 
   async function sbGet(table, query = '') {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
