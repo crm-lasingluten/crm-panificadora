@@ -50,7 +50,7 @@ const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota","Mu
 const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
 const TIPOS_CLI   = ["Potencial","Cliente","Inactivo"];
-const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Pedidos","Fichas Tecnicas","Catalogo","Informes","Configuración"];
+const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Albaranes","Fichas Tecnicas","Catalogo","Informes","Configuración"];
 const MESES       = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const CY = new Date().getFullYear();
 const CM = new Date().getMonth() + 1;
@@ -63,31 +63,31 @@ const TIPO_C = { Llamada:"#7f77dd", Email:"#378add", Reunión:"#1d9e75", Visita:
 const IVA_TIPOS      = [{"label":"21%","value":21},{"label":"10%","value":10},{"label":"4%","value":4},{"label":"0%","value":0}];
 const UNIDADES_MEDIDA = ["Unidad","Caja","Saco","Pallet","Kilos"];
 const DOC_TIPOS  = ["pedido","proforma","presupuesto"];
-const DOC_LABELS = {pedido:"Pedido", proforma:"Proforma", presupuesto:"Presupuesto"};
+const DOC_LABELS = {pedido:"Albarán", proforma:"Proforma", presupuesto:"Presupuesto"};
 const DOC_COLORS = {pedido:"#378add", proforma:"#7f77dd", presupuesto:"#1d9e75"};
 const IDIOMAS    = [{value:"es",label:"ES Castellano"},{value:"en",label:"EN English"}];
 const T = {
   es:{
-    pedido:"PEDIDO", proforma:"PROFORMA", presupuesto:"PRESUPUESTO",
+    pedido:"ALBARÁN", proforma:"PROFORMA", presupuesto:"PRESUPUESTO",
     cliente:"Cliente", fecha:"Fecha", entrega:"Entrega prevista", gestor:"Gestor",
     codigo:"Codigo", producto:"Producto", unidad:"Unidad", cantidad:"Cantidad",
     precio:"Precio unit.", base:"Base", iva_pct:"IVA%", total_iva:"Total c/IVA",
     presentacion:"Presentacion", uds_caja:"Uds por Caja/Saco", uds_pallet:"Uds/Pallet", caducidad:"Caducidad", lote:"Lote", cad_prod:"Caducidad",
     base_imp:"Base imponible", total_iva_r:"Total IVA", total:"TOTAL",
-    sin_valorizar:"Pedido sin valorizar", observaciones:"Observaciones",
+    sin_valorizar:"Albarán sin valorizar", observaciones:"Observaciones",
     dir_entrega:"Direccion de entrega", resumen:"Resumen fiscal",
     lista_precio:"Lista de precio", condiciones:"Condiciones comerciales",
     nif:"NIF", tel:"Tel", generado:"Documento generado el", estado:"Estado",
     linea:"Linea", tipo:"Tipo", detalles:"Detalles del documento",
   },
   en:{
-    pedido:"ORDER", proforma:"PROFORMA", presupuesto:"QUOTE",
+    pedido:"DELIVERY NOTE", proforma:"PROFORMA", presupuesto:"QUOTE",
     cliente:"Customer", fecha:"Date", entrega:"Delivery date", gestor:"Sales rep",
     codigo:"Code", producto:"Product", unidad:"Unit", cantidad:"Qty",
     precio:"Unit price", base:"Net", iva_pct:"VAT%", total_iva:"Total incl. VAT",
     presentacion:"Presentation", uds_caja:"Units per Box/Bag", uds_pallet:"Units/Pallet", caducidad:"Expiry", lote:"Batch", cad_prod:"Expiry",
     base_imp:"Net amount", total_iva_r:"Total VAT", total:"TOTAL",
-    sin_valorizar:"Order (no pricing)", observaciones:"Notes",
+    sin_valorizar:"Delivery note (no pricing)", observaciones:"Notes",
     dir_entrega:"Delivery address", resumen:"Tax summary",
     lista_precio:"Price list", condiciones:"Commercial conditions",
     nif:"VAT No.", tel:"Tel", generado:"Document generated on", estado:"Status",
@@ -688,7 +688,7 @@ function DetalleCliente(props) {
         })
       }
       {pdfHistorial.length>0&&<div>
-        <Sep label={"Pedidos y Proformas ("+pdfHistorial.length+")"} />
+        <Sep label={"Albaranes y Proformas ("+pdfHistorial.length+")"} />
         {pdfHistorial.map(function(r){
           return <div key={r.id} style={{display:"flex",gap:8,alignItems:"center",padding:"7px 10px",background:"#f9f9f9",borderRadius:8,marginBottom:6}}>
             <Badge color={DOC_COLORS[r.tipo]||"#888"} label={DOC_LABELS[r.tipo]||r.tipo} />
@@ -1388,7 +1388,7 @@ function PedidoEditor(props){
   function handleSave(){
     if(!form.cliente_id||!lineas.length){alert("Selecciona un cliente y agrega al menos un producto.");return;}
     setSaving(true);
-    var prefixMap={pedido:"PED",proforma:"PRF",presupuesto:"PRE"};
+    var prefixMap={pedido:"ALB",proforma:"PRF",presupuesto:"PRE"};
     var prefix=prefixMap[form.tipo]||"PED";
     sbGet("pedidos","tipo=eq."+form.tipo+"&select=numero&order=id.desc&limit=1").then(function(rows){
       var lastNum=0;
@@ -1659,7 +1659,7 @@ function TabPedidos(props){
   }
 
   function handleDelete(pedido){
-    if(!confirm("Eliminar "+pedido.tipo+" "+pedido.numero+"?"))return;
+    if(!confirm("Eliminar "+(DOC_LABELS[pedido.tipo]||pedido.tipo)+" "+pedido.numero+"?"))return;
     sbDel("pedidos",pedido.id).then(function(){reload();}).catch(function(e){alert("Error: "+e.message);});
   }
 
@@ -1718,7 +1718,7 @@ function TabPedidos(props){
     </div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
-      {[["Total",pedidos.length,"#185fa5"],["Pedidos",pedidos.filter(function(p){return p.tipo==="pedido";}).length,"#378add"],["Proformas",pedidos.filter(function(p){return p.tipo==="proforma";}).length,"#7f77dd"],["Presupuestos",pedidos.filter(function(p){return p.tipo==="presupuesto";}).length,"#1d9e75"]].map(function(item){
+      {[["Total",pedidos.length,"#185fa5"],["Albaranes",pedidos.filter(function(p){return p.tipo==="pedido";}).length,"#378add"],["Proformas",pedidos.filter(function(p){return p.tipo==="proforma";}).length,"#7f77dd"],["Presupuestos",pedidos.filter(function(p){return p.tipo==="presupuesto";}).length,"#1d9e75"]].map(function(item){
         return <div key={item[0]} style={{background:"#fff",border:"1px solid #e8e8e8",borderRadius:8,padding:"0.75rem 1rem"}}>
           <div style={{fontSize:11,color:"#888",marginBottom:2}}>{item[0]}</div>
           <div style={{fontSize:22,fontWeight:600,color:item[2]}}>{item[1]}</div>
@@ -1753,7 +1753,7 @@ function TabPedidos(props){
           </tr>;
         })}</tbody>
       </table>
-      {pedFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>Sin documentos. Crea tu primer pedido, proforma o presupuesto.</div>}
+      {pedFilt.length===0&&<div style={{textAlign:"center",color:"#aaa",padding:"2rem",fontSize:13}}>Sin documentos. Crea tu primer albarán, proforma o presupuesto.</div>}
     </div>}
   </div>;
 }
@@ -2621,7 +2621,7 @@ function CRM() {
         {tab==="Clientes"      &&<TabClientes />}
         {tab==="Actividades"   &&<TabActividades />}
         {tab==="Ventas"        &&<TabVentas />}
-        {tab==="Pedidos"       &&<TabPedidos clients={clients} config={config} currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} onRePrintFromClient={onRePrintFromClient} />}
+        {tab==="Albaranes"     &&<TabPedidos clients={clients} config={config} currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} onRePrintFromClient={onRePrintFromClient} />}
         {tab==="Fichas Tecnicas"&&<TabFichasTecnicas currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
         {tab==="Catalogo"       &&<TabCatalogo currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
         {tab==="Informes"      &&<TabInformes />}
