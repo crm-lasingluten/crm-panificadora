@@ -50,7 +50,7 @@ const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota","Mu
 const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
 const TIPOS_CLI   = ["Potencial","Cliente","Inactivo"];
-const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Albaranes","Fichas Tecnicas","Catalogo","Informes","Configuración"];
+const TABS        = ["Dashboard","Clientes","Actividades","Ventas","Albaranes","Catalogo","Informes","Configuración"];
 const MESES       = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const CY = new Date().getFullYear();
 const CM = new Date().getMonth() + 1;
@@ -2625,7 +2625,6 @@ function CRM() {
         {tab==="Actividades"   &&<TabActividades />}
         {tab==="Ventas"        &&<TabVentas />}
         {tab==="Albaranes"     &&<TabPedidos clients={clients} config={config} currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} onRePrintFromClient={onRePrintFromClient} />}
-        {tab==="Fichas Tecnicas"&&<TabFichasTecnicas currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
         {tab==="Catalogo"       &&<TabCatalogo currentUser={currentUser} lineaActiva={lineaActiva} linColor={linColor} />}
         {tab==="Informes"      &&<TabInformes />}
         {tab==="Configuración" &&<TabConfiguracion />}
