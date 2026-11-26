@@ -52,6 +52,32 @@ const LINEA_COLOR = { "La Sin Gluten": "#5bb5bc", "Bauer Lemans": "#c0392b" };
 const LINEA_GRAD  = { "La Sin Gluten": "linear-gradient(135deg,#8ecfd4,#5bb5bc)", "Bauer Lemans": "linear-gradient(135deg,#c0392b,#922b21)" };
 const LINEA_LOGO  = { "La Sin Gluten": "https://crm-lasingluten.github.io/crm-panificadora/Logo_02.png", "Bauer Lemans": "https://crm-lasingluten.github.io/crm-panificadora/LOGO BAUER.png" };
 
+// Selector rápido de módulos (evita tener que salir y volver a entrar al portal)
+const BAUER_LEMANS_PORTAL = "https://crm-lasingluten.github.io/bauer-lemans/";
+const BAUER_LEMANS_MODULOS = [
+  {num:"01",name:"CRM",url:"https://crm-lasingluten.github.io/crm-panificadora/",key:"crm"},
+  {num:"02",name:"Fichas Técnicas & Recetas",url:"https://crm-lasingluten.github.io/fichas-rietmann/",key:"fichas"},
+  {num:"03",name:"Tarifas",url:"https://crm-lasingluten.github.io/TARIFAS/",key:"tarifas"},
+  {num:"04",name:"Catálogos",url:"https://crm-lasingluten.github.io/catalogos/",key:"catalogos"},
+  {num:"05",name:"Incidencias",url:"https://crm-lasingluten.github.io/INCIDENCIAS/",key:"incidencias"},
+  {num:"06",name:"Movimiento Inventario",url:"https://crm-lasingluten.github.io/MOVIMIENTO-INVENTARIO/",key:"inventario"},
+  {num:"07",name:"Servicios Logísticos",url:"https://crm-lasingluten.github.io/Servicioslogisticos/",key:"logistica"},
+  {num:"08",name:"Etiquetas",url:"https://crm-lasingluten.github.io/etiquetas/",key:"etiquetas"},
+  {num:"09",name:"Informes & Ventas",url:"https://crm-lasingluten.github.io/informes/",key:"informes"},
+  {num:"10",name:"Agenda",url:"https://crm-lasingluten.github.io/AGENDA/",key:"agenda"},
+  {num:"11",name:"Proyectos",url:"https://crm-lasingluten.github.io/PROYECTOS-BAUER/",key:"proyectos"}
+];
+const LA_SIN_GLUTEN_PORTAL = "https://crm-lasingluten.github.io/modulo-gestion-la-sin-gluten/";
+const LA_SIN_GLUTEN_MODULOS = [
+  {num:"01",name:"CRM",url:"https://crm-lasingluten.github.io/crm-panificadora/",key:"crm"},
+  {num:"02",name:"Costos",url:"https://crm-lasingluten.github.io/MODULO-DE-COSTOS/",key:"costos"},
+  {num:"03",name:"Procesos",url:"https://crm-lasingluten.github.io/procesos-la-sin-gluten/",key:"procesos"},
+  {num:"04",name:"Catálogos",url:"https://crm-lasingluten.github.io/-catalogo-la-sin-gluten/",key:"catalogos"},
+  {num:"05",name:"Recetas",url:"https://crm-lasingluten.github.io/recetaslasingluten/",key:"recetas"},
+  {num:"06",name:"Actas",url:"https://crm-lasingluten.github.io/ACTAS/",key:"actas"},
+  {num:"07",name:"Producción",url:"https://crm-lasingluten.github.io/modulo_producci-n/",key:"produccion"}
+];
+
 const TIPOS       = ["Llamada","Email","Reunión","Visita","WhatsApp","Nota","Muestras"];
 const PRIORIDADES = ["Alta","Media","Baja"];
 const ESTADOS_ACT = ["Pendiente","En curso","Completada"];
@@ -2389,6 +2415,31 @@ function CRM() {
   var [actFiltro,setActFiltro]=useState({gestor:"",estado:"",tipo:""});
   var [dashGestor,setDashGestor]=useState("");
   var [newVal,setNewVal]=useState({canal:"",grupo:"",gestor:""});
+  var [moduleMenu,setModuleMenu]=useState(null);
+
+  useEffect(function(){
+    function closeModuleMenu(){setModuleMenu(null);}
+    document.addEventListener("click",closeModuleMenu);
+    return function(){document.removeEventListener("click",closeModuleMenu);};
+  },[]);
+
+  function renderGestorMenu(menuKey,label,bg,border,modules,portalUrl){
+    var open=moduleMenu===menuKey;
+    return (
+      <div style={{position:"relative"}}>
+        <button type="button" onClick={function(e){e.stopPropagation();setModuleMenu(open?null:menuKey);}}
+          style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:500,padding:"5px 12px",borderRadius:20,background:bg,border:"1px solid "+border,color:"#fff",cursor:"pointer",fontFamily:"inherit"}}>
+          {label} <span style={{fontSize:9,display:"inline-block",transform:open?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span>
+        </button>
+        {open&&<div onClick={function(e){e.stopPropagation();}} style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:250,maxHeight:"65vh",overflowY:"auto",background:"#fff",borderRadius:10,boxShadow:"0 10px 30px rgba(0,0,0,.25)",padding:6,zIndex:9999}}>
+          <a href={portalUrl} target="_top" style={{display:"block",padding:"8px 10px",borderRadius:6,color:"#333",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.03em",textDecoration:"none",borderBottom:"1px solid #eee",marginBottom:4}}>🏠 Portal — todos los módulos</a>
+          {modules.map(function(m){
+            return <a key={m.key} href={m.url} target="_top" style={{display:"block",padding:"8px 10px",borderRadius:6,color:m.key==="crm"?"#111":"#222",fontWeight:m.key==="crm"?600:400,fontSize:12,textDecoration:"none",background:m.key==="crm"?"rgba(0,0,0,.05)":"transparent"}}>{m.num} · {m.name}{m.key==="crm"?" (aquí)":""}</a>;
+          })}
+        </div>}
+      </div>
+    );
+  }
 
   function clientName(id){var c=clients.find(function(x){return x.id===id;});return c?c.nombre:"—";}
 
@@ -2751,13 +2802,9 @@ function CRM() {
             <div style={{width:8,height:8,borderRadius:"50%",background:loading?"#ffd700":error?"#ff6b6b":"#90ee90"}} />
             <span style={{fontSize:12,color:"#fff"}}>{loading?"Conectando…":error?"Sin conexión":"Conectado"}</span>
           </div>
-          <a href="https://crm-lasingluten.github.io/modulo-gestion-la-sin-gluten/" style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:500,padding:"5px 12px",borderRadius:20,background:"rgba(91,181,188,0.25)",border:"1px solid rgba(91,181,188,0.6)",color:"#fff",textDecoration:"none"}}>
-            <span style={{fontSize:13,lineHeight:1}}>←</span> La Sin Gluten
-          </a>
+          {renderGestorMenu("lsg","GESTOR LA SIN GLUTEN","rgba(91,181,188,0.25)","rgba(91,181,188,0.6)",LA_SIN_GLUTEN_MODULOS,LA_SIN_GLUTEN_PORTAL)}
           {(currentUser.lineas||[]).indexOf("Bauer Lemans") >= 0 && (
-            <a href="https://crm-lasingluten.github.io/bauer-lemans/" style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:500,padding:"5px 12px",borderRadius:20,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",color:"#fff",textDecoration:"none"}}>
-              <span style={{fontSize:13,lineHeight:1}}>←</span> Bauer Lemans
-            </a>
+            renderGestorMenu("blm","GESTOR BAUER LEMANS","rgba(255,255,255,0.15)","rgba(255,255,255,0.3)",BAUER_LEMANS_MODULOS,BAUER_LEMANS_PORTAL)
           )}
           <Btn onClick={handleLogout} style={{fontSize:12,padding:"5px 12px",background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",color:"#fff"}}>Salir</Btn>
         </div>
